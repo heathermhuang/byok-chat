@@ -1,0 +1,62 @@
+{
+  "name": "byok-chat",
+  "version": "0.1.0",
+  "description": "Browser-local BYOK chat workspace with a hardened Cloudflare Worker proxy.",
+  "license": "Apache-2.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit && vite build",
+    "build:official": "tsc --noEmit && vite build --mode official",
+    "check": "npm test && npm run build",
+    "deploy": "npm run deploy:staging",
+    "deploy:self-hosted": "npm run verify:public-env && npm run build && wrangler deploy --config wrangler.local.toml --keep-vars",
+    "deploy:staging": "npm run verify:official-env && npm run build:official && wrangler deploy --config wrangler.staging.toml --keep-vars",
+    "deploy:production": "npm run verify:official-env && npm run build:official && wrangler deploy --keep-vars",
+    "dev": "npm run build && wrangler dev --local --port ${PORT:-8799}",
+    "release:assets": "node scripts/compare-deploy-assets.mjs",
+    "start": "npm run dev",
+    "test": "node --test test/*.test.mjs",
+    "test:browser": "node scripts/browser-smoke.mjs",
+    "verify:official-env": "node --env-file=.env.official scripts/check-public-env.mjs",
+    "verify:public-env": "node scripts/check-public-env.mjs"
+  },
+  "engines": {
+    "node": "^20.19.0 || ^22.12.0 || >=24.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/heathermhuang/byok-chat.git"
+  },
+  "homepage": "https://byok.chat",
+  "bugs": {
+    "url": "https://github.com/heathermhuang/byok-chat/issues"
+  },
+  "keywords": [
+    "byok",
+    "chat",
+    "cloudflare-workers",
+    "openai-compatible",
+    "react"
+  ],
+  "dependencies": {
+    "@assistant-ui/react": "^0.14.26",
+    "lucide-react": "^1.22.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
+    "unpdf": "^1.6.2"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.1",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.3",
+    "jsdom": "^29.1.1",
+    "playwright": "^1.61.1",
+    "typescript": "^6.0.3",
+    "vite": "^8.1.2",
+    "wrangler": "^4.106.0"
+  }
+}

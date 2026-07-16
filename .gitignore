@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.wrangler/
+.DS_Store
+.env
+.env.*
+!.env.example
+!.env.official
+.dev.vars
+.dev.vars.*
+wrangler.local.toml
+npm-debug.log*
+.gstack/
