@@ -1,0 +1,41 @@
+name = "byok-chat"
+main = "src/worker.ts"
+compatibility_date = "2026-07-01"
+compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
+workers_dev = false
+
+routes = [
+  { pattern = "byok.chat", custom_domain = true },
+  { pattern = "www.byok.chat", custom_domain = true }
+]
+
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+run_worker_first = ["/api/*"]
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+invocation_logs = true
+
+[[ratelimits]]
+name = "API_RATE_LIMITER"
+namespace_id = "6720151001"
+
+[ratelimits.simple]
+limit = 30
+period = 60
+
+[[ratelimits]]
+name = "STATUS_RATE_LIMITER"
+namespace_id = "6720151002"
+
+[ratelimits.simple]
+limit = 120
+period = 60

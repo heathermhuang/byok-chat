@@ -1,0 +1,17 @@
+{
+  "name": "BYOK Chat",
+  "short_name": "BYOK",
+  "description": "Private, browser-local workspace for your own model provider keys.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8f6f1",
+  "theme_color": "#f8f6f1",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

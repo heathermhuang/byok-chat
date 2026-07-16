@@ -1,0 +1,26 @@
+name: Feature request
+description: Propose a focused improvement to the browser-local BYOK workspace.
+title: "[Feature]: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What user problem should this solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Describe the smallest useful change.
+    validations:
+      required: true
+  - type: textarea
+    id: boundaries
+    attributes:
+      label: Security and privacy considerations
+      description: Explain any effect on credentials, browser storage, Worker transit, providers, tools, or analytics.
+    validations:
+      required: true
