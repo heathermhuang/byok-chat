@@ -1,4 +1,5 @@
 import type { AppendMessage, AttachmentAdapter, CompleteAttachment, PendingAttachment } from '@assistant-ui/react'
+import { secureRandomId } from './random-id.ts'
 
 export const ATTACHMENT_ACCEPT = [
   'image/png',
@@ -57,8 +58,7 @@ function fileDataUrl(file: File): Promise<string> {
 }
 
 function createAttachmentId(file: File): string {
-  const suffix = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`
-  return `${file.name}-${suffix}`
+  return `${file.name}-${secureRandomId()}`
 }
 
 export class ByokAttachmentAdapter implements AttachmentAdapter {

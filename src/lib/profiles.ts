@@ -1,6 +1,7 @@
 import { type ByokModel, normalizeBaseUrl } from './model-utils.ts'
 import { normalizeGenerationParams, type GenerationParams } from './generation-options.ts'
 import { getProviderDefaultModel, getProviderPreset, type ProviderId } from './providers.ts'
+import { secureRandomId } from './random-id.ts'
 import type { EncryptedSecret } from './secure-storage.ts'
 import { normalizeToolDefaults, type ToolDefaults } from './tools.ts'
 
@@ -41,8 +42,7 @@ function migrateStorageKey(key: string, legacyKey: string): void {
 }
 
 function createId(): string {
-  if (crypto.randomUUID) return `profile-${crypto.randomUUID()}`
-  return `profile-${Date.now()}-${Math.random().toString(36).slice(2)}`
+  return secureRandomId('profile')
 }
 
 export function defaultProfile(): ByokProfile {

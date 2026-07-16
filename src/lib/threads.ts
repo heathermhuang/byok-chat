@@ -1,5 +1,6 @@
 import type { GeneratedMediaAttachment, PendingMediaJob } from './api.ts'
 import type { InputAttachment } from './attachments.ts'
+import { secureRandomId } from './random-id.ts'
 
 export type ThreadRole = 'user' | 'assistant' | 'tool'
 
@@ -73,8 +74,7 @@ function now() {
 }
 
 export function createId(prefix: string): string {
-  if (globalThis.crypto?.randomUUID) return `${prefix}-${globalThis.crypto.randomUUID()}`
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`
+  return secureRandomId(prefix)
 }
 
 export function createThread(profileId: string, title = 'New thread'): ByokThread {
