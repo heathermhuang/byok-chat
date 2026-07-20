@@ -75,11 +75,15 @@ test('keeps Dependabot updates grouped without reoffering incompatible releases'
   assert.match(dependabot, /dependency-name:\s+["']@assistant-ui\/react["']\s+versions:\s+- ["']0\.14\.27["']/)
 })
 
-test('enforces dependency engine compatibility in public CI', () => {
-  const ci = read('.github/workflows/ci.yml')
+test('keeps the assistant UI dependency graph compatible with Node 20', () => {
+  const packageJson = JSON.parse(read('package.json'))
+  const packageLock = JSON.parse(read('package-lock.json'))
 
-  assert.doesNotMatch(ci, /run:\s+npm ci\s*$/m)
-  assert.match(ci, /run:\s+npm ci --engine-strict/)
+  assert.match(packageJson.engines.node, /\^20\.19\.0/)
+  assert.equal(packageJson.dependencies['@assistant-ui/react'], '^0.14.26')
+  assert.equal(packageLock.packages['node_modules/@assistant-ui/core'].version, '0.2.20')
+  assert.equal(packageLock.packages['node_modules/assistant-stream'].version, '0.3.25')
+  assert.equal(packageLock.packages['node_modules/nanoid'].version, '5.1.16')
 })
 
 test('keeps known private release metadata out of the public tree', () => {
