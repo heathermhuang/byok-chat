@@ -1,4 +1,4 @@
-import { Download, Eye, EyeOff, Lock, Plus, RotateCcw, Save, Search, Trash2, Unlock } from 'lucide-react'
+import { Download, Eye, EyeOff, Lock, Plus, RotateCcw, Save, Search, ShieldCheck, Trash2, Unlock } from 'lucide-react'
 import type { Dispatch, SetStateAction } from 'react'
 import {
   IMAGE_QUALITY_OPTIONS,
@@ -134,9 +134,9 @@ export function EndpointForm({
   return (
     <div className="endpoint-form">
       <div className="form-intro endpoint-wide">
-        <p className="eyebrow">Provider launchpad</p>
-        <strong>{activeProvider.label}</strong>
-        <span>Keys are stored only in this browser. Passphrase encryption is optional.</span>
+        <p className="eyebrow">Bring Your Own Key</p>
+        <strong>Connect {activeProvider.label}</strong>
+        <span>Use a key from your own provider account. BYOK Chat does not sell or resell model access.</span>
       </div>
 
       {profiles.length ? (
@@ -206,6 +206,15 @@ export function EndpointForm({
           </button>
         </div>
       </label>
+
+      <div className="key-trust-note endpoint-wide">
+        <ShieldCheck size={19} aria-hidden="true" />
+        <div>
+          <strong>Your key stays under your control.</strong>
+          <p>Stored in this browser; active requests pass through the BYOK Chat Cloudflare Worker in memory. We do not intentionally keep a server-side chat archive.</p>
+          <a href="/privacy">See exactly how data moves</a>
+        </div>
+      </div>
 
       {showAdvancedFields ? (
         <label className="toggle-row endpoint-wide trust-row">
@@ -414,7 +423,7 @@ export function EndpointForm({
           </>
         ) : null}
         <button className="button primary" type="button" onClick={() => { void saveDraft() }} disabled={secretBusy}>
-          {keyStorage === 'passphrase' ? <Lock size={16} /> : <Save size={16} />} {secretBusy ? 'Saving' : 'Save'}
+          {keyStorage === 'passphrase' ? <Lock size={16} /> : <Save size={16} />} {secretBusy ? (isSetupFlow ? 'Connecting…' : 'Saving…') : (isSetupFlow ? 'Save & connect' : 'Save changes')}
         </button>
       </div>
 

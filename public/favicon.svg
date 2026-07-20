@@ -1,12 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="BYOK Chat">
-  <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-      <stop stop-color="#d9f3e9"/>
-      <stop offset=".52" stop-color="#f9dfcf"/>
-      <stop offset="1" stop-color="#e5dcf1"/>
-    </linearGradient>
-  </defs>
-  <rect x="3" y="3" width="58" height="58" rx="10" fill="url(#g)" stroke="#292524" stroke-opacity=".22" stroke-width="2"/>
-  <rect x="11" y="11" width="42" height="42" rx="7" fill="none" stroke="#fff" stroke-opacity=".8"/>
-  <text x="32" y="37" text-anchor="middle" font-family="ui-monospace,monospace" font-size="13" font-weight="700" fill="#292524">BYOK</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="BYOK Chat key mark">
+  <rect x="3" y="3" width="58" height="58" rx="12" fill="#0d5b4d"/>
+  <circle cx="24" cy="31" r="9" fill="none" stroke="#fff" stroke-width="4"/>
+  <path d="M33 31h20M44 31v8M51 31v6" fill="none" stroke="#fff" stroke-linecap="round" stroke-linejoin="round" stroke-width="4"/>
 </svg>

@@ -42,8 +42,8 @@ export function PrivacyControls() {
       <section className="consent-banner" aria-label="Cookie consent" role="region">
         <div className="consent-icon" aria-hidden="true"><ShieldCheck size={20} /></div>
         <div className="consent-copy">
-          <strong>Your workspace stays browser-local.</strong>
-          <p>Required storage saves profiles, threads, and this choice. Optional analytics counts page visits; it never receives prompts, thread content, or API keys.</p>
+          <strong>Saved data stays in this browser.</strong>
+          <p>Required storage keeps profiles and threads on your device. Optional analytics never receives prompts, chat content, or API keys. Model requests are explained in our privacy policy.</p>
           <div className="consent-links">
             <a href="/cookies">Cookie policy</a>
             <a href="/privacy">Privacy policy</a>
