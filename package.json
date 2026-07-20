@@ -40,7 +40,7 @@
     "react"
   ],
   "dependencies": {
-    "@assistant-ui/react": "^0.14.27",
+    "@assistant-ui/react": "^0.14.26",
     "lucide-react": "^1.25.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
