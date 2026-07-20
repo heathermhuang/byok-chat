@@ -22,7 +22,7 @@
     "verify:public-env": "node scripts/check-public-env.mjs"
   },
   "engines": {
-    "node": "^20.19.0 || ^22.12.0 || >=24.0.0"
+    "node": "^22.13.0 || >=24.0.0"
   },
   "repository": {
     "type": "git",
@@ -40,7 +40,7 @@
     "react"
   ],
   "dependencies": {
-    "@assistant-ui/react": "^0.14.26",
+    "@assistant-ui/react": "^0.14.27",
     "lucide-react": "^1.25.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
