@@ -67,6 +67,25 @@ test('pins every third-party workflow action to an immutable commit', () => {
   }
 })
 
+test('keeps Dependabot updates grouped without reoffering incompatible releases', () => {
+  const dependabot = read('.github/dependabot.yml')
+  const githubActions = dependabot.slice(dependabot.indexOf('package-ecosystem: github-actions'))
+
+  assert.match(githubActions, /groups:\s+github-actions:\s+patterns:\s+- ["']\*["']/)
+  assert.match(dependabot, /dependency-name:\s+["']@assistant-ui\/react["']\s+versions:\s+- ["']0\.14\.27["']/)
+})
+
+test('keeps the assistant UI dependency graph compatible with Node 20', () => {
+  const packageJson = JSON.parse(read('package.json'))
+  const packageLock = JSON.parse(read('package-lock.json'))
+
+  assert.match(packageJson.engines.node, /\^20\.19\.0/)
+  assert.equal(packageJson.dependencies['@assistant-ui/react'], '^0.14.26')
+  assert.equal(packageLock.packages['node_modules/@assistant-ui/core'].version, '0.2.20')
+  assert.equal(packageLock.packages['node_modules/assistant-stream'].version, '0.3.25')
+  assert.equal(packageLock.packages['node_modules/nanoid'].version, '5.1.16')
+})
+
 test('keeps known private release metadata out of the public tree', () => {
   const combined = publicTextFiles().map((file) => readFileSync(file, 'utf8')).join('\n')
   const privateHome = ['/Users', 'heatherm'].join('/')

@@ -11,9 +11,17 @@ updates:
         dependency-type: production
       development-dependencies:
         dependency-type: development
+    ignore:
+      - dependency-name: "@assistant-ui/react"
+        versions:
+          - "0.14.27"
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
       day: monday
     open-pull-requests-limit: 5
+    groups:
+      github-actions:
+        patterns:
+          - "*"
