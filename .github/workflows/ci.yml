@@ -34,6 +34,14 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+      - name: Validate Cloudflare deployment configs
+        if: matrix.node == '24.x'
+        env:
+          WRANGLER_LOG_PATH: /tmp/wrangler-deploy-dry-run.log
+          WRANGLER_SEND_METRICS: "false"
+        run: |
+          npx wrangler deploy --dry-run --config wrangler.staging.toml --outdir /tmp/wrangler-staging
+          npx wrangler deploy --dry-run --config wrangler.toml --outdir /tmp/wrangler-production
 
   dependency-audit:
     runs-on: ubuntu-latest
