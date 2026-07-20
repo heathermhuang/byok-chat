@@ -75,4 +75,4 @@ BYOK Chat does not protect against:
 
 ## Verification
 
-The repository includes regression tests for private-host rejection, HTTPS enforcement, redirect handling, error redaction, attachment limits, tool permissions, analytics gating, security headers, and rate-limit responses. Public CI also runs the unit suite, production build, dependency audit, secret scan, and CodeQL analysis.
+The repository includes regression tests for private-host rejection, HTTPS enforcement, redirect handling, error redaction, attachment limits, tool permissions, analytics gating, security headers, and rate-limit responses. Public CI also runs the unit suite, production build, deployment-config dry-runs, dependency audit, secret scan, and CodeQL analysis.
