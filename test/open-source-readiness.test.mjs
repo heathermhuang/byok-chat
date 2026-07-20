@@ -67,6 +67,13 @@ test('pins every third-party workflow action to an immutable commit', () => {
   }
 })
 
+test('groups GitHub Actions updates into one Dependabot pull request', () => {
+  const dependabot = read('.github/dependabot.yml')
+  const githubActions = dependabot.slice(dependabot.indexOf('package-ecosystem: github-actions'))
+
+  assert.match(githubActions, /groups:\s+github-actions:\s+patterns:\s+- ["']\*["']/)
+})
+
 test('keeps known private release metadata out of the public tree', () => {
   const combined = publicTextFiles().map((file) => readFileSync(file, 'utf8')).join('\n')
   const privateHome = ['/Users', 'heatherm'].join('/')
