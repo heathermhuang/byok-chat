@@ -50,7 +50,7 @@ import {
   Paperclip,
   Trash2,
 } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import {
@@ -85,6 +85,7 @@ type ByokAssistantProps = {
   onProfileChange: (patch: Partial<ByokProfile>) => void
   onSaveProfile: () => Promise<boolean>
   onRefreshModels: () => void
+  onOpenEndpointSettings: () => void
   fetchState: 'idle' | 'loading' | 'error'
   status: string
 }
@@ -286,24 +287,35 @@ function ComposerAttachment() {
 }
 
 function ToolCallPart({ toolName, args, result, isError }: ToolCallMessagePartProps) {
+  const resultRecord = result && typeof result === 'object' ? result as Record<string, unknown> : undefined
+  const resultSummary = [resultRecord?.title, resultRecord?.excerpt, typeof result === 'string' ? result : undefined]
+    .find((value): value is string => typeof value === 'string' && Boolean(value.trim()))
+  const summary = resultSummary
+    ? `${resultSummary.trim().slice(0, 180)}${resultSummary.trim().length > 180 ? '…' : ''}`
+    : isError ? 'The tool call failed.' : 'Tool result ready.'
+
   return (
     <div className={`tool-card ${isError ? 'error' : ''}`}>
       <div className="tool-card-head">
         <span><Wrench size={14} /> {toolName}</span>
         <small>{isError ? 'error' : 'done'}</small>
       </div>
-      <div className="tool-card-grid">
-        <div className="tool-value">
-          <span>Input</span>
-          <pre>{JSON.stringify(args, null, 2)}</pre>
-        </div>
-        {result !== undefined ? (
+      <p className="tool-summary">{summary}</p>
+      <details className="tool-details">
+        <summary>View request and response</summary>
+        <div className="tool-card-grid">
           <div className="tool-value">
-            <span>Result</span>
-            <pre>{typeof result === 'string' ? result : JSON.stringify(result, null, 2)}</pre>
+            <span>Input</span>
+            <pre>{JSON.stringify(args, null, 2)}</pre>
           </div>
-        ) : null}
-      </div>
+          {result !== undefined ? (
+            <div className="tool-value">
+              <span>Result</span>
+              <pre>{typeof result === 'string' ? result : JSON.stringify(result, null, 2)}</pre>
+            </div>
+          ) : null}
+        </div>
+      </details>
     </div>
   )
 }
@@ -321,11 +333,17 @@ function ByokAuiMessage({
   onEditStart,
   onVariationMessageId,
   onCheckMediaJob,
+  onRetryMessageId,
+  onChooseModel,
+  onOpenEndpointSettings,
 }: {
   model: string
   onEditStart: () => void
   onVariationMessageId: (messageId: string) => void
   onCheckMediaJob: (messageId: string) => void
+  onRetryMessageId: (messageId: string) => void
+  onChooseModel: () => void
+  onOpenEndpointSettings: () => void
 }) {
   const role = useAuiState((state) => state.message.role)
   const messageId = useAuiState((state) => state.message.id)
@@ -349,7 +367,13 @@ function ByokAuiMessage({
         {custom.metadata ? <RunMetaBar metadata={custom.metadata} compact /> : null}
         {custom.status === 'error' ? (
           <ErrorPrimitive.Root className="message-error">
-            <span>Request failed</span>
+            <strong>Request failed</strong>
+            <p>Try again, switch models, or review the endpoint connection.</p>
+            <div className="error-recovery-actions">
+              <button type="button" onClick={() => onRetryMessageId(messageId)} disabled={isRunning}><RefreshCcw size={14} /> Retry</button>
+              <button type="button" onClick={onChooseModel}><SlidersHorizontal size={14} /> Choose another model</button>
+              <button type="button" onClick={onOpenEndpointSettings}><Gauge size={14} /> Endpoint settings</button>
+            </div>
           </ErrorPrimitive.Root>
         ) : null}
         <div className="message-controls">
@@ -363,10 +387,14 @@ function ByokAuiMessage({
               <EditPromptButton onEditStart={onEditStart} />
             </MessagePrimitive.If>
             <MessagePrimitive.If assistant>
-              <ActionBarPrimitive.Reload title="Retry"><RefreshCcw size={14} /></ActionBarPrimitive.Reload>
-              <button type="button" title="Variation" disabled={isRunning} onClick={() => onVariationMessageId(messageId)}>
-                <Sparkles size={14} />
-              </button>
+              {custom.status !== 'error' ? (
+                <>
+                  <ActionBarPrimitive.Reload title="Retry"><RefreshCcw size={14} /></ActionBarPrimitive.Reload>
+                  <button type="button" title="Variation" disabled={isRunning} onClick={() => onVariationMessageId(messageId)}>
+                    <Sparkles size={14} />
+                  </button>
+                </>
+              ) : null}
               {hasPendingVideoJob ? (
                 <button type="button" title="Check video status" disabled={isRunning} onClick={() => onCheckMediaJob(messageId)}>
                   <RefreshCw size={14} />
@@ -439,12 +467,17 @@ export function ByokAssistant({
   onProfileChange,
   onSaveProfile,
   onRefreshModels,
+  onOpenEndpointSettings,
   fetchState,
   status,
 }: ByokAssistantProps) {
   const [sending, setSending] = useState(false)
   const [activePanel, setActivePanel] = useState<WorkspacePanelId | null>(null)
   const [threadMenuOpen, setThreadMenuOpen] = useState(false)
+  const [mobileActionsOpen, setMobileActionsOpen] = useState(false)
+  const threadMenuTriggerRef = useRef<HTMLButtonElement>(null)
+  const mobileMoreTriggerRef = useRef<HTMLButtonElement>(null)
+  const mobileActionsSheetRef = useRef<HTMLDivElement>(null)
   const [diagnostics, setDiagnostics] = useState<DiagnosticsResult | undefined>()
   const [diagnosticsBusy, setDiagnosticsBusy] = useState(false)
   const [toolSettings, setToolSettings] = useState<ChatToolSettings>(() => createToolSettings(profile.defaultTools, profile.searchApiKey))
@@ -454,7 +487,7 @@ export function ByokAssistant({
   const [compareProfileIds, setCompareProfileIds] = useState<string[]>(() => profiles.filter((item) => item.apiKey && item.selectedModel).slice(0, 3).map((item) => item.id))
   const [compareResults, setCompareResults] = useState<CompareResult[]>([])
   const [editingActive, setEditingActive] = useState(false)
-  const [confirmAction, setConfirmAction] = useState<{ title: string; body: string; confirmLabel: string; run: () => void } | undefined>()
+  const [confirmAction, setConfirmAction] = useState<{ title: string; body: string; confirmLabel: string; returnFocus?: HTMLElement | null; run: () => void } | undefined>()
   const attachmentAdapter = useMemo(() => new ByokAttachmentAdapter(), [])
   const runnableCompareProfiles = profiles.filter((item) => item.apiKey && item.selectedModel)
   const modeLabel = mode === 'chat' ? 'Chat' : mode === 'image_generation' ? 'Image' : 'Video'
@@ -462,6 +495,55 @@ export function ByokAssistant({
   useEffect(() => {
     setToolSettings(createToolSettings(profile.defaultTools, profile.searchApiKey))
   }, [profile.defaultTools, profile.id, profile.searchApiKey])
+
+  useEffect(() => {
+    if (!mobileActionsOpen) return
+    const mobileViewport = window.matchMedia('(max-width: 820px)')
+    if (!mobileViewport.matches) {
+      setMobileActionsOpen(false)
+      return
+    }
+    const sheet = mobileActionsSheetRef.current
+    sheet?.querySelector<HTMLElement>('[data-mobile-action]')?.focus()
+
+    const handleSheetKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        setMobileActionsOpen(false)
+        return
+      }
+      if (event.key !== 'Tab' || !sheet) return
+
+      const focusable = Array.from(sheet.querySelectorAll<HTMLElement>('button:not([disabled])'))
+      if (!focusable.length) return
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      const activeElement = document.activeElement
+
+      if (!sheet.contains(activeElement)) {
+        event.preventDefault()
+        const target = event.shiftKey ? last : first
+        target.focus()
+      } else if (event.shiftKey && activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+    const handleViewportChange = (event: MediaQueryListEvent) => {
+      if (!event.matches) setMobileActionsOpen(false)
+    }
+    document.addEventListener('keydown', handleSheetKeyDown)
+    mobileViewport.addEventListener('change', handleViewportChange)
+    return () => {
+      document.removeEventListener('keydown', handleSheetKeyDown)
+      mobileViewport.removeEventListener('change', handleViewportChange)
+      const trigger = mobileMoreTriggerRef.current
+      if (trigger?.isConnected && trigger.getClientRects().length) trigger.focus()
+    }
+  }, [mobileActionsOpen])
 
   function commitMessages(messages: ThreadMessage[]) {
     const title = thread.title === 'New thread' ? textTitle(messages.find((message) => message.role === 'user')?.text || '') : thread.title
@@ -694,7 +776,9 @@ export function ByokAssistant({
       status: 'pending',
       actionContext: { promptText, mode: runMode, sourceMessageId: source?.id },
     }
-    const displayMessages = [...thread.messages, pendingMessage]
+    const messageIndex = thread.messages.findIndex((item) => item.id === message.id)
+    const displayBase = variation || messageIndex < 0 ? thread.messages : thread.messages.slice(0, messageIndex)
+    const displayMessages = [...displayBase, pendingMessage]
     const sourceIndex = source ? thread.messages.findIndex((item) => item.id === source.id) : -1
     const requestMessages = sourceIndex >= 0
       ? thread.messages.slice(0, sourceIndex + 1)
@@ -723,6 +807,11 @@ export function ByokAssistant({
   function runVariationById(messageId: string) {
     const message = thread.messages.find((item) => item.id === messageId)
     if (message) void rerunMessage(message, true)
+  }
+
+  function retryMessageById(messageId: string) {
+    const message = thread.messages.find((item) => item.id === messageId)
+    if (message) void rerunMessage(message)
   }
 
   async function checkPendingMediaJob(messageId: string) {
@@ -848,20 +937,22 @@ export function ByokAssistant({
     setActivePanel(null)
   }
 
-  function requestArchive() {
+  function requestArchive(returnFocus?: HTMLElement | null) {
     setConfirmAction({
       title: 'Archive thread?',
       body: 'This hides the thread from the active list. You can undo immediately after the action.',
       confirmLabel: 'Archive',
+      returnFocus,
       run: () => onArchiveThread(thread.id),
     })
   }
 
-  function requestDelete() {
+  function requestDelete(returnFocus?: HTMLElement | null) {
     setConfirmAction({
       title: 'Delete thread?',
       body: 'This removes the thread from local browser storage. You can undo immediately after the action.',
       confirmLabel: 'Delete',
+      returnFocus,
       run: () => onDeleteThread(thread.id),
     })
   }
@@ -891,9 +982,19 @@ export function ByokAssistant({
   const runtime = useExternalStoreRuntime(adapter)
   const MessageComponent = useMemo(() => {
     return function MessageComponent() {
-      return <ByokAuiMessage model={profile.selectedModel} onEditStart={() => setEditingActive(true)} onVariationMessageId={runVariationById} onCheckMediaJob={checkPendingMediaJob} />
+      return (
+        <ByokAuiMessage
+          model={profile.selectedModel}
+          onEditStart={() => setEditingActive(true)}
+          onVariationMessageId={runVariationById}
+          onCheckMediaJob={checkPendingMediaJob}
+          onRetryMessageId={retryMessageById}
+          onChooseModel={() => setActivePanel('settings')}
+          onOpenEndpointSettings={onOpenEndpointSettings}
+        />
+      )
     }
-  }, [profile.selectedModel, thread.messages, sending])
+  }, [profile.selectedModel, thread.messages, sending, onOpenEndpointSettings])
   const EditComposerComponent = useMemo(() => {
     return function EditComposerComponent() {
       return <ByokEditComposer onEditingDone={() => setEditingActive(false)} />
@@ -910,6 +1011,7 @@ export function ByokAssistant({
         <div className="thread-title-edit">
           <input
             aria-label="Thread title"
+            title={thread.title}
             value={thread.title}
             onChange={(event) => onThreadChange(updateThread(thread, { title: event.target.value }))}
           />
@@ -927,7 +1029,7 @@ export function ByokAssistant({
             <span>{fetchState === 'loading' ? 'Fetching' : 'Fetch'}</span>
           </button>
           <button
-            className={`button secondary workspace-tool-button ${activePanel === 'settings' ? 'active' : ''}`}
+            className={`button secondary workspace-tool-button desktop-workspace-action ${activePanel === 'settings' ? 'active' : ''}`}
             type="button"
             aria-label="Run controls"
             aria-pressed={activePanel === 'settings'}
@@ -935,8 +1037,9 @@ export function ByokAssistant({
           >
             <SlidersHorizontal size={16} /> <span>Controls</span>
           </button>
-          <div className="thread-menu">
+          <div className="thread-menu desktop-workspace-action">
             <button
+              ref={threadMenuTriggerRef}
               className="icon-button compact"
               type="button"
               title="Thread actions"
@@ -950,15 +1053,53 @@ export function ByokAssistant({
               <div className="thread-menu-popover" role="menu">
                 <button type="button" role="menuitem" onClick={() => { setThreadMenuOpen(false); onNewThread() }}><CopyPlus size={15} /> New thread</button>
                 <button type="button" role="menuitem" onClick={() => { setThreadMenuOpen(false); onTogglePinThread(thread.id) }}>{thread.pinned ? <PinOff size={15} /> : <Pin size={15} />}{thread.pinned ? 'Unpin thread' : 'Pin thread'}</button>
-                <button type="button" role="menuitem" onClick={() => { setThreadMenuOpen(false); requestArchive() }}><Archive size={15} /> Archive thread</button>
-                <button className="danger" type="button" role="menuitem" onClick={() => { setThreadMenuOpen(false); requestDelete() }}><Trash2 size={15} /> Delete thread</button>
+                <button type="button" role="menuitem" onClick={() => { setThreadMenuOpen(false); requestArchive(threadMenuTriggerRef.current) }}><Archive size={15} /> Archive thread</button>
+                <button className="danger" type="button" role="menuitem" onClick={() => { setThreadMenuOpen(false); requestDelete(threadMenuTriggerRef.current) }}><Trash2 size={15} /> Delete thread</button>
               </div>
             ) : null}
           </div>
-          <button className={`button secondary workspace-tool-button ${activePanel === 'tools' ? 'active' : ''}`} type="button" aria-label="Tools" aria-pressed={activePanel === 'tools'} onClick={() => togglePanel('tools')}><Wrench size={16} /> <span>Tools</span></button>
-          <button className={`button secondary workspace-tool-button ${activePanel === 'compare' ? 'active' : ''}`} type="button" aria-label="Compare" aria-pressed={activePanel === 'compare'} onClick={() => togglePanel('compare')}><PanelRightOpen size={16} /> <span>Compare</span></button>
-          <button className="button secondary workspace-tool-button" type="button" aria-label="Diagnose" onClick={() => void runDiagnostics()}><Gauge size={16} /> <span>Diagnose</span></button>
+          <button className={`button secondary workspace-tool-button desktop-workspace-action ${activePanel === 'tools' ? 'active' : ''}`} type="button" aria-label="Tools" aria-pressed={activePanel === 'tools'} onClick={() => togglePanel('tools')}><Wrench size={16} /> <span>Tools</span></button>
+          <button className={`button secondary workspace-tool-button desktop-workspace-action ${activePanel === 'compare' ? 'active' : ''}`} type="button" aria-label="Compare" aria-pressed={activePanel === 'compare'} onClick={() => togglePanel('compare')}><PanelRightOpen size={16} /> <span>Compare</span></button>
+          <button className="button secondary workspace-tool-button desktop-workspace-action" type="button" aria-label="Diagnose" onClick={() => void runDiagnostics()}><Gauge size={16} /> <span>Diagnose</span></button>
+          <button
+            ref={mobileMoreTriggerRef}
+            className="button secondary mobile-more-trigger"
+            type="button"
+            aria-haspopup="dialog"
+            aria-expanded={mobileActionsOpen}
+            aria-controls="mobile-workspace-actions"
+            onClick={() => setMobileActionsOpen(true)}
+          >
+            <MoreHorizontal size={16} /> More
+          </button>
         </div>
+        {mobileActionsOpen ? (
+          <>
+            <div className="mobile-actions-backdrop" aria-hidden="true" onClick={() => setMobileActionsOpen(false)} />
+            <div
+              ref={mobileActionsSheetRef}
+              className="mobile-actions-sheet"
+              id="mobile-workspace-actions"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="mobile-workspace-actions-title"
+            >
+              <div className="mobile-actions-sheet-head">
+                <strong id="mobile-workspace-actions-title">More actions</strong>
+                <button className="icon-button compact" type="button" aria-label="Close more actions" onClick={() => setMobileActionsOpen(false)}><X size={15} /></button>
+              </div>
+              <button data-mobile-action type="button" onClick={() => { setMobileActionsOpen(false); togglePanel('settings') }}><SlidersHorizontal size={16} /> Run controls</button>
+              <button data-mobile-action type="button" onClick={() => { setMobileActionsOpen(false); togglePanel('tools') }}><Wrench size={16} /> Tools</button>
+              <button data-mobile-action type="button" onClick={() => { setMobileActionsOpen(false); togglePanel('compare') }}><PanelRightOpen size={16} /> Compare</button>
+              <button data-mobile-action type="button" onClick={() => { setMobileActionsOpen(false); void runDiagnostics() }}><Gauge size={16} /> Diagnose provider</button>
+              <div className="mobile-actions-divider" />
+              <button data-mobile-action type="button" onClick={() => { setMobileActionsOpen(false); onNewThread() }}><CopyPlus size={16} /> New thread</button>
+              <button data-mobile-action type="button" onClick={() => { setMobileActionsOpen(false); onTogglePinThread(thread.id) }}>{thread.pinned ? <PinOff size={16} /> : <Pin size={16} />}{thread.pinned ? 'Unpin thread' : 'Pin thread'}</button>
+              <button data-mobile-action type="button" onClick={() => { setMobileActionsOpen(false); requestArchive(mobileMoreTriggerRef.current) }}><Archive size={16} /> Archive thread</button>
+              <button data-mobile-action className="danger" type="button" onClick={() => { setMobileActionsOpen(false); requestDelete(mobileMoreTriggerRef.current) }}><Trash2 size={16} /> Delete thread</button>
+            </div>
+          </>
+        ) : null}
       </header>
 
       <div className="workspace-body">
@@ -1107,6 +1248,7 @@ export function ByokAssistant({
           title={confirmAction.title}
           body={confirmAction.body}
           confirmLabel={confirmAction.confirmLabel}
+          returnFocus={confirmAction.returnFocus}
           onCancel={() => setConfirmAction(undefined)}
           onConfirm={() => {
             const action = confirmAction.run

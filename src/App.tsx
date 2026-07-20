@@ -1,4 +1,4 @@
-import { Check, Download, FolderDown, KeyRound, Plus, Search, SlidersHorizontal, X } from 'lucide-react'
+import { Check, Download, FolderDown, KeyRound, Plus, Search, ShieldCheck, SlidersHorizontal, X } from 'lucide-react'
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { EndpointForm } from './components/EndpointForm'
 import { ProviderIcon } from './components/ProviderIcon'
@@ -16,6 +16,14 @@ function deploymentState(hostname: string) {
   if (hostname === 'byok.chat') return { label: 'Production', kind: 'production' }
   if (hostname === 'staging.byok.chat') return { label: 'Staging', kind: 'staging' }
   return { label: 'Local', kind: 'local' }
+}
+
+function GitHubMark({ size = 17 }: { size?: number }) {
+  return (
+    <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M12 .7A11.5 11.5 0 0 0 8.36 23.1c.58.1.79-.25.79-.56v-2.02c-3.23.7-3.91-1.37-3.91-1.37-.53-1.35-1.29-1.7-1.29-1.7-1.05-.72.08-.71.08-.71 1.17.08 1.78 1.2 1.78 1.2 1.04 1.77 2.72 1.26 3.38.96.1-.75.4-1.26.74-1.55-2.58-.29-5.29-1.29-5.29-5.68 0-1.26.45-2.28 1.19-3.08-.12-.29-.52-1.47.11-3.05 0 0 .97-.31 3.16 1.18A10.9 10.9 0 0 1 12 6.33c.98 0 1.94.13 2.86.39 2.2-1.49 3.16-1.18 3.16-1.18.63 1.58.23 2.76.11 3.05.74.8 1.19 1.82 1.19 3.08 0 4.4-2.72 5.38-5.3 5.67.42.36.79 1.07.79 2.16v3.04c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .7Z" />
+    </svg>
+  )
 }
 
 function profileModelCapabilities(profile: ByokProfile, model: ByokModel) {
@@ -49,7 +57,7 @@ export function App() {
   const [showKey, setShowKey] = useState(false)
   const [modelQuery, setModelQuery] = useState('')
   const [fetchState, setFetchState] = useState<'idle' | 'loading' | 'error'>('idle')
-  const [status, setStatus] = useState('Profiles stay in this browser.')
+  const [status, setStatus] = useState('Profile changes are saved in this browser.')
   const [configOpen, setConfigOpen] = useState(false)
   const [keyStorage, setKeyStorage] = useState<'browser' | 'passphrase'>(() => draft.encryptedApiKey ? 'passphrase' : 'browser')
   const [passphrase, setPassphrase] = useState('')
@@ -495,12 +503,12 @@ export function App() {
     <main className={shellClassName}>
       <aside className="lab-sidebar" aria-label="Profiles">
         <div className="brand-block">
-          <span className="brand-mark">
-            <span>BYOK</span>
+          <span className="brand-mark" aria-hidden="true">
+            <KeyRound size={19} />
           </span>
           <div>
             <h1>BYOK Chat</h1>
-            <p>Private model workspace</p>
+            <p>Bring Your Own Key</p>
           </div>
         </div>
 
@@ -550,6 +558,8 @@ export function App() {
                 className={`thread-item ${thread.id === activeThread.id ? 'active' : ''}`}
                 key={thread.id}
                 type="button"
+                title={thread.title}
+                aria-label={`${thread.title}, ${thread.messages.length} messages${thread.pinned ? ', pinned' : ''}`}
                 onClick={() => setThreadState({ threads, activeThreadId: thread.id })}
               >
                 <strong>{thread.title}</strong>
@@ -584,6 +594,13 @@ export function App() {
           <button className="button secondary rail-new-profile" type="button" onClick={() => newProfile()}>
             <Plus size={16} /> New profile
           </button>
+          <a className="rail-source-link" href="https://github.com/heathermhuang/byok-chat" target="_blank" rel="noreferrer">
+            <GitHubMark />
+            <span className="rail-source-copy">
+              <strong>Open source</strong>
+              <small>View BYOK Chat on GitHub</small>
+            </span>
+          </a>
           <nav className="rail-legal" aria-label="Legal and privacy">
             <a href="/privacy">Privacy</a>
             <a href="/terms">Terms</a>
@@ -596,9 +613,17 @@ export function App() {
       <section className="console-main">
         <header className="console-strip">
           <div className="strip-title">
-            <p className="eyebrow">Private model workspace</p>
-            <h1>{canRun ? `Chat with ${draft.selectedModel}` : 'Connect a model, then start talking.'}</h1>
-            <p className="strip-copy">{activeProvider.label} / {endpointHost} / {capabilitySummary}</p>
+            <div className="mobile-brand-lockup" aria-label="BYOK Chat, Bring Your Own Key">
+              <span className="mobile-brand-mark" aria-hidden="true"><KeyRound size={15} /></span>
+              <span><strong>BYOK Chat</strong><small>Bring Your Own Key</small></span>
+            </div>
+            <p className="eyebrow">BYOK = Bring Your Own Key</p>
+            <h1>{canRun ? `Chat with ${draft.selectedModel}` : 'Connect your provider. Keep control.'}</h1>
+            <p className="strip-copy">
+              {canRun
+                ? `${activeProvider.label} / ${endpointHost} / ${capabilitySummary}`
+                : 'Use a key from your own AI provider account.'}
+            </p>
           </div>
           <div className="strip-controls">
             <div className="strip-meter" aria-label="Current session status">
@@ -609,7 +634,10 @@ export function App() {
                 {canRun ? <Check size={15} /> : <KeyRound size={15} />}
                 {canRun ? `${modeLabel} ready` : 'Setup needed'}
               </span>
-              <span>{modelCountLabel} models</span>
+              <span className="privacy-pill" title="Profiles and threads are saved in this browser.">
+                <ShieldCheck size={14} /> Saved locally
+              </span>
+              <span className="model-count-pill">{modelCountLabel} models</span>
             </div>
             {canRun ? (
               <button
@@ -659,6 +687,7 @@ export function App() {
                 onProfileChange={updateDraft}
                 onSaveProfile={() => saveDraft()}
                 onRefreshModels={() => { void refreshModels() }}
+                onOpenEndpointSettings={() => setConfigOpen(true)}
                 fetchState={fetchState}
                 status={status}
               />
@@ -671,17 +700,26 @@ export function App() {
                   <span className="status-line" />
                   <span className="status-cursor" />
                 </div>
-                <p className="eyebrow">Private BYOK endpoint</p>
-                <h2>{selectedUnsupportedReason ? 'Select a supported model.' : 'Connect a provider.'}</h2>
-                <p>{selectedUnsupportedReason || 'Add a key and choose a model. Chat opens as soon as the profile can run.'}</p>
-                <div className="setup-mode-card" aria-label="Current run mode">
-                  <span>{canRun ? modeLabel : 'Setup'}</span>
-                  <div className="mode-route" aria-label="Setup path">
-                    <span>Provider</span>
-                    <span>Key</span>
-                    <span>Model</span>
+                <p className="eyebrow">Your account. Your access.</p>
+                <h2>{selectedUnsupportedReason ? 'Select a supported model.' : 'Use the providers you already trust.'}</h2>
+                <p>{selectedUnsupportedReason || 'Connect one provider account here; access and billing remain with that provider.'}</p>
+                <div className="setup-trust-list" aria-label="How BYOK Chat handles your data">
+                  <div>
+                    <ShieldCheck size={17} />
+                    <span><strong>Saved here</strong><small>Profiles, keys, and threads stay in this browser.</small></span>
                   </div>
-                  <strong>{canRun ? 'Ready' : 'Waiting for setup'}</strong>
+                  <div>
+                    <ShieldCheck size={17} />
+                    <span><strong>Active transit only</strong><small>Requests pass through our Worker in memory.</small></span>
+                  </div>
+                  <div>
+                    <ShieldCheck size={17} />
+                    <span><strong>No server archive</strong><small>We do not intentionally keep chat copies.</small></span>
+                  </div>
+                </div>
+                <div className="setup-proof-links">
+                  <a href="/privacy">Read the privacy details</a>
+                  <a href="https://github.com/heathermhuang/byok-chat/blob/main/docs/SECURITY_MODEL.md" target="_blank" rel="noreferrer">Review the security model</a>
                 </div>
                 <div className="setup-steps" aria-label="Setup progress">
                   {setupSteps.map((step, index) => (

@@ -2,22 +2,38 @@
 
 ## Product Context
 
-BYOK Chat is a standalone private model workspace for people who bring their own provider keys. It is not a Sub2API admin screen, not a generic LLM tester, and not a marketing page.
+BYOK Chat is a standalone private AI workspace for people who bring their own provider keys. BYOK always expands to **Bring Your Own Key** at the first product touch. The product does not sell or resell model access; it connects provider accounts, access, and billing the user already controls.
 
-The user should remember: this is serious chat software that happens to make endpoint setup fast.
+The user should remember: **my provider, my account, my key**. This is serious chat software with a clear trust model, not a Sub2API admin screen, a generic LLM tester, or a marketing landing page.
+
+Trust claims must distinguish storage from transit:
+
+- Profiles, saved keys, and thread history are stored in the browser.
+- Active credentials and request content pass through the BYOK Chat Cloudflare Worker in memory to the selected provider.
+- The application does not intentionally create a server-side chat archive.
+- Never imply that an active model request stays entirely on the device.
 
 Primary references:
 
-- ElevenLabs UI: warm off-white component-library canvas, ink-first CTAs, compact component rhythm, editorial restraint.
-- Vercel: crisp light developer surfaces, strong hairlines, restrained contrast, technical clarity.
-- Raycast: command-palette density, keyboard-tool atmosphere, product UI as the visual language.
+- Coinbase (primary): institutional calm, modest type weights, one scarce brand signal, and plain-language trust.
+- Vercel (secondary): crisp developer surfaces, strong hairlines, restrained contrast, and technical clarity.
 
 ## Aesthetic Direction
 
-- Direction: Light Agent Workspace.
-- Mood: warm, precise, technical, premium, and chat-first.
-- Decoration: intentional only. Use hairline grids, subtle elevation, compact command surfaces, text-session motifs, and tiny pastel status signals. Do not use voice, audio, waveform, dark-shell, decorative blob, bokeh, stock imagery, or gradient-hero treatments.
+- Direction: Trusted BYOK Workspace.
+- Mood: calm, candid, precise, established, and chat-first.
+- Brand personality: controlled, transparent, capable, and quietly confident. Never secretive, breathless, cute, or overpromising.
+- Decoration: minimal and functional. Use warm white surfaces, hairlines, subtle elevation, compact command surfaces, and a single deep-evergreen brand signal. Do not use voice, audio, waveform, dark-shell, decorative blob, bokeh, stock imagery, pastel gradients, or gradient-hero treatments.
 - Layout: two-zone desktop shell with a left profile rail and dominant center assistant workspace. Endpoint details open in a temporary drawer only when requested.
+
+## Positioning and Voice
+
+- First-touch expansion: `BYOK = Bring Your Own Key`.
+- Product promise: `Use the AI provider account you already control.`
+- Supporting proof: local saves, optional passphrase encryption, in-memory Worker transit, and no intentional server-side chat archive.
+- Use plain ownership language: `your provider`, `your account`, `your key`, `saved in this browser`.
+- Avoid vague claims such as `fully private`, `never leaves your device`, or `zero knowledge`.
+- Trust is proven with specific mechanisms and links to the privacy policy and public security model, not shield decoration alone.
 
 ## Typography
 
@@ -53,12 +69,14 @@ Assistant canvas:
 
 Signals:
 
-- `--accent` `#292524`: model focus, active state, focus rings.
-- `--action` `#0c0a09`: provider setup and save actions.
-- `--ready` `#16a34a`: connected/ready state.
+- `--brand` `#0d5b4d`: BYOK identity and first-touch trust signal.
+- `--brand-strong` `#083f36`: primary actions and strong branded type.
+- `--brand-soft` `#e7f2ef`: trust notes and selected surfaces.
+- `--accent` `#0d5b4d`: model focus, active state, and focus rings.
+- `--action` `#083f36`: provider setup and save actions.
+- `--ready` `#0f8a70`: connected/ready state.
 - `--warn` `#b7791f`: setup needed.
 - `--danger` `#d92d20`: errors.
-- Pastel accents: mint `#a7e5d3`, peach `#f4c5a8`, lavender `#c8b8e0`, sky `#a8c8e8`, rose `#e8b8c4`. Use only for small text-session and state visuals, never as CTA fills.
 
 Use accent colors as operational signals, not decoration.
 
@@ -75,9 +93,9 @@ Desktop:
 Mobile:
 
 - One column.
-- Profile rail appears first but remains compact.
-- Chat/setup follows immediately.
+- Workspace setup or chat appears first; the compact profile rail follows below it.
 - Endpoint details use a bounded drawer/bottom sheet instead of stacking a permanent diagnostics section.
+- Secondary ready-state controls use a `More actions` dialog that traps focus, closes on Escape, and restores focus to its trigger.
 - Touch targets are at least 44px.
 - Long model/provider names truncate or wrap without pushing layout wider than the viewport.
 
@@ -86,15 +104,20 @@ Mobile:
 - Radius: 4px, 6px, 8px. Do not use bubbly cards.
 - Buttons use lucide icons when the action is standard.
 - Provider presets are light command cards with compact provider glyphs and one metadata line.
+- The product mark is a white key on deep evergreen. Do not place the acronym inside a decorative gradient tile.
+- The brand lockup pairs `BYOK Chat` with the explicit descriptor `Bring Your Own Key`.
+- Setup includes one concise trust note that tells users where the key is saved, how active requests transit the Worker, and that no server-side chat archive is intentionally created.
 - Text-chat motifs are allowed when tied to real state: provider-to-model routes, prompt lines, cursor marks, sync bands, and mode labels.
 - Ready-state status shows only real state: provider, mode, endpoint, model count, and capabilities in the header or explicit endpoint drawer.
-- Message actions only show verified controls: copy and regenerate.
+- Message actions are context-specific and verified: copy, edit/retry/variation where supported, pending-media status, and explicit recovery actions for failed requests.
+- Tool results disclose progressively: show a concise summary first and place raw request/response detail behind an explicit disclosure control.
 - Chat composer is the strongest control in ready state.
 - Empty chat state must look like an assistant surface, not a blank tester.
 
 ## Interaction
 
 - Setup flow: provider, key, model.
+- Setup CTA: `Save & connect`; ready-state CTA: `Save changes`.
 - Ready flow: suggestions, thread, composer.
 - Fetch models is a sync action, not required for manual model IDs.
 - Web tools remain a clear toggle and stay disabled when unsupported.
@@ -109,3 +132,5 @@ Mobile:
 - Do not turn this into a marketing landing page.
 - Do not use a dark shell, dark rails, or dark chat bubbles.
 - Do not use purple gradient SaaS defaults.
+- Do not display `BYOK` without expanding it at a first-touch product surface.
+- Do not conflate browser-local storage with request transit through the Worker.

@@ -232,8 +232,8 @@ export function LegalPage({ kind }: { kind: LegalPageKind }) {
     <main className="legal-shell">
       <header className="legal-header">
         <a className="legal-brand" href="/" aria-label="Back to BYOK Chat">
-          <span className="brand-mark"><span>BYOK</span></span>
-          <span><strong>BYOK Chat</strong><small>Private model workspace</small></span>
+          <span className="brand-mark"><ShieldCheck size={17} /></span>
+          <span><strong>BYOK Chat</strong><small>Bring Your Own Key</small></span>
         </a>
         <LegalNav current={kind} />
       </header>

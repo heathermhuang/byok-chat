@@ -1,6 +1,7 @@
 import { Check, Loader2, Sparkles, X } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { useEffect, useRef } from 'react'
 import type { DiagnosticsResult } from '../../lib/api'
 import type { ByokProfile } from '../../lib/profiles'
 import type { RunMetadata } from '../../lib/threads'
@@ -189,22 +190,68 @@ export function ConfirmDialog({
   title,
   body,
   confirmLabel,
+  returnFocus,
   onCancel,
   onConfirm,
 }: {
   title: string
   body: string
   confirmLabel: string
+  returnFocus?: HTMLElement | null
   onCancel: () => void
   onConfirm: () => void
 }) {
+  const dialogRef = useRef<HTMLElement>(null)
+  const cancelRef = useRef<HTMLButtonElement>(null)
+  const onCancelRef = useRef(onCancel)
+  const previousFocusRef = useRef<HTMLElement | null>(typeof document === 'undefined' ? null : document.activeElement as HTMLElement | null)
+  onCancelRef.current = onCancel
+
+  useEffect(() => {
+    const dialog = dialogRef.current
+    cancelRef.current?.focus()
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        onCancelRef.current()
+        return
+      }
+      if (event.key !== 'Tab' || !dialog) return
+
+      const focusable = Array.from(dialog.querySelectorAll<HTMLElement>('button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'))
+      if (!focusable.length) return
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      const activeElement = document.activeElement
+
+      if (!dialog.contains(activeElement)) {
+        event.preventDefault()
+        ;(event.shiftKey ? last : first).focus()
+      } else if (event.shiftKey && activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown)
+      const target = returnFocus?.isConnected ? returnFocus : previousFocusRef.current
+      if (target?.isConnected) target.focus()
+    }
+  }, [returnFocus])
+
   return (
     <div className="dialog-backdrop" role="presentation">
-      <section className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+      <section ref={dialogRef} className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-body">
         <h2 id="confirm-title">{title}</h2>
-        <p>{body}</p>
+        <p id="confirm-body">{body}</p>
         <div className="dialog-actions">
-          <button className="button secondary" type="button" onClick={onCancel}>Cancel</button>
+          <button ref={cancelRef} className="button secondary" type="button" onClick={onCancel}>Cancel</button>
           <button className="button danger" type="button" onClick={onConfirm}>{confirmLabel}</button>
         </div>
       </section>

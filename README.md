@@ -1,6 +1,8 @@
 # BYOK Chat
 
-BYOK Chat is a browser-local workspace for chatting with your own AI provider keys. It supports official providers, OpenRouter, custom OpenAI-compatible endpoints, persistent local threads, comparison, usage visibility, permissioned web tools, and in-thread media generation.
+BYOK means **Bring Your Own Key**. BYOK Chat lets you use keys from AI provider accounts you control in one private workspace. It does not sell or resell model access, and it does not add a model subscription between you and your provider.
+
+The workspace supports official providers, OpenRouter, custom OpenAI-compatible endpoints, persistent local threads, comparison, usage visibility, permissioned web tools, and in-thread media generation.
 
 The hosted product is available at [byok.chat](https://byok.chat).
 

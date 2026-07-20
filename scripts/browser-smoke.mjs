@@ -87,12 +87,16 @@ try {
     try {
       await page.goto(baseUrl, { waitUntil: 'networkidle' })
       await page.getByRole('heading', { name: 'Byok Chat' }).waitFor({ timeout: 10_000 })
-      await page.getByRole('heading', { name: 'Connect a model, then start talking.' }).waitFor({ timeout: 10_000 })
+      await page.getByRole('heading', { name: 'Connect your provider. Keep control.' }).waitFor({ timeout: 10_000 })
 
       await chooseNecessaryStorage(page)
 
-      assert.equal(await page.title(), 'BYOK Chat · Private model workspace')
+      assert.equal(await page.title(), 'BYOK Chat · Bring Your Own Key')
       assert.ok(await page.getByRole('button', { name: /OpenRouter/i }).count() >= 1)
+      const githubLink = page.getByRole('link', { name: /Open source.*GitHub/i })
+      assert.equal(await githubLink.count(), 1)
+      assert.equal(await githubLink.getAttribute('href'), 'https://github.com/heathermhuang/byok-chat')
+      assert.equal(await githubLink.getAttribute('target'), '_blank')
       assert.equal(await page.locator('.lab-sidebar').getByRole('button', { name: 'OpenAI', exact: true }).count(), 0)
       assert.equal(await page.getByRole('button', { name: /Fetch models/i }).count(), 0)
       assert.equal(await page.locator('.workspace-system-field, .workspace-param-grid, .workspace-notes-field, .workspace-tags-field, .model-fetch-row, .trust-row').count(), 0)
@@ -118,6 +122,12 @@ try {
           const baseUrl = document.querySelector('.base-url-field')
           const setupCopy = document.querySelector('.setup-copy')
           const modelFetchRow = document.querySelector('.model-fetch-row')
+          const brand = document.querySelector('.mobile-brand-lockup')?.getBoundingClientRect()
+          const statusChips = [...document.querySelectorAll('.strip-meter > span')]
+            .filter((element) => getComputedStyle(element).display !== 'none')
+            .map((element) => element.getBoundingClientRect().right)
+          const modelCount = document.querySelector('.model-count-pill')
+          const saveButton = document.querySelector('.setup-state .endpoint-actions .button')?.getBoundingClientRect()
           return {
             consoleTop: consoleMain?.top ?? -1,
             sidebarTop: sidebar?.top ?? -1,
@@ -128,6 +138,11 @@ try {
             baseUrlDisplay: baseUrl ? getComputedStyle(baseUrl).display : 'missing',
             setupCopyDisplay: setupCopy ? getComputedStyle(setupCopy).display : 'missing',
             modelFetchDisplay: modelFetchRow ? getComputedStyle(modelFetchRow).display : 'missing',
+            brandTop: brand?.top ?? -1,
+            brandBottom: brand?.bottom ?? -1,
+            statusChips,
+            modelCountDisplay: modelCount ? getComputedStyle(modelCount).display : 'missing',
+            saveButtonHeight: saveButton?.height ?? 0,
           }
         })
         assert.ok(mobileLayout.consoleTop <= 1, `mobile should open on the workspace, got console top ${mobileLayout.consoleTop}`)
@@ -138,6 +153,10 @@ try {
         assert.ok(['none', 'missing'].includes(mobileLayout.baseUrlDisplay), `mobile preset setup should hide base URL, got ${mobileLayout.baseUrlDisplay}`)
         assert.ok(['none', 'missing'].includes(mobileLayout.setupCopyDisplay), `mobile setup should hide copy panel, got ${mobileLayout.setupCopyDisplay}`)
         assert.ok(['none', 'missing'].includes(mobileLayout.modelFetchDisplay), `mobile setup should hide model fetch controls, got ${mobileLayout.modelFetchDisplay}`)
+        assert.ok(mobileLayout.brandTop >= 0 && mobileLayout.brandBottom <= mobileLayout.viewportHeight, `mobile product identity should be in the first viewport: ${JSON.stringify(mobileLayout)}`)
+        assert.ok(mobileLayout.statusChips.every((right) => right <= 390 + 1), `mobile status chips should stay inside the viewport: ${JSON.stringify(mobileLayout.statusChips)}`)
+        assert.equal(mobileLayout.modelCountDisplay, 'none')
+        assert.ok(mobileLayout.saveButtonHeight >= 44, `mobile setup action should meet the 44px touch target: ${mobileLayout.saveButtonHeight}`)
       }
 
       const path = caseScreenshotPath(smokeCase.name)
@@ -195,18 +214,33 @@ try {
   try {
     await setupFlowPage.goto(baseUrl, { waitUntil: 'networkidle' })
     await chooseNecessaryStorage(setupFlowPage)
+    const providerCardLayout = await setupFlowPage.locator('.provider-chip').evaluateAll((cards) => cards.map((card) => {
+      const cardBox = card.getBoundingClientRect()
+      const copyBox = card.querySelector('.provider-copy')?.getBoundingClientRect()
+      return {
+        cardTop: cardBox.top,
+        cardBottom: cardBox.bottom,
+        copyTop: copyBox?.top ?? -1,
+        copyBottom: copyBox?.bottom ?? -1,
+      }
+    }))
+    assert.equal(providerCardLayout.length, 9)
+    for (const item of providerCardLayout) {
+      assert.ok(item.copyTop >= item.cardTop - 0.5, `provider text must start inside its card: ${JSON.stringify(item)}`)
+      assert.ok(item.copyBottom <= item.cardBottom + 0.5, `provider text must end inside its card: ${JSON.stringify(item)}`)
+    }
     await setupFlowPage.getByRole('button', { name: 'Custom' }).click()
     assert.equal(await setupFlowPage.locator('.setup-state .workspace-system-field, .setup-state .workspace-param-grid, .setup-state .workspace-notes-field, .setup-state .workspace-tags-field, .setup-state .model-fetch-row, .setup-state .trust-row, .setup-state label.model-select').count(), 0)
     assert.equal(await setupFlowPage.locator('.setup-state .endpoint-actions button').count(), 1)
     await setupFlowPage.getByLabel('Profile name').fill('Custom gateway')
     await setupFlowPage.getByLabel('Base URL').fill('https://custom.example/v1')
-    await setupFlowPage.getByRole('button', { name: 'Save' }).scrollIntoViewIfNeeded()
-    const saveButtonBox = await setupFlowPage.getByRole('button', { name: 'Save' }).boundingBox()
+    await setupFlowPage.getByRole('button', { name: 'Save & connect' }).scrollIntoViewIfNeeded()
+    const saveButtonBox = await setupFlowPage.getByRole('button', { name: 'Save & connect' }).boundingBox()
     assert.ok(saveButtonBox, 'Save button should be reachable in short setup viewport')
     assert.ok(saveButtonBox.y >= 0 && saveButtonBox.y + saveButtonBox.height <= 540, 'Save button should scroll into view in short setup viewport')
     await setupFlowPage.getByLabel('API key', { exact: true }).fill('test-key')
-    await setupFlowPage.getByRole('button', { name: 'Save' }).scrollIntoViewIfNeeded()
-    await setupFlowPage.getByRole('button', { name: 'Save' }).click()
+    await setupFlowPage.getByRole('button', { name: 'Save & connect' }).scrollIntoViewIfNeeded()
+    await setupFlowPage.getByRole('button', { name: 'Save & connect' }).click()
     await waitForCondition(() => setupFlowModelRequests.length === 1, 'setup save should auto-fetch models')
     await setupFlowPage.getByText('Chat ready').waitFor({ timeout: 10_000 })
     await setupFlowPage.getByRole('button', { name: /Custom gateway/ }).waitFor({ timeout: 10_000 })
@@ -362,7 +396,7 @@ try {
     await saveFlowPage.getByRole('button', { name: 'Endpoint', exact: true }).click()
     await saveFlowPage.locator('.endpoint-drawer').waitFor({ timeout: 10_000 })
     await saveFlowPage.getByLabel('API key', { exact: true }).fill('new-key')
-    await saveFlowPage.locator('.endpoint-drawer').getByRole('button', { name: 'Save', exact: true }).click()
+    await saveFlowPage.locator('.endpoint-drawer').getByRole('button', { name: 'Save changes', exact: true }).click()
 
     await waitForCondition(() => saveFlowModelRequests.length === 1, 'saving the endpoint should auto-fetch models')
     await saveFlowPage.locator('.endpoint-drawer').waitFor({ state: 'detached', timeout: 10_000 })
@@ -606,6 +640,11 @@ try {
     assert.equal(await chatPage.getByTitle('Export markdown').count(), 0)
     assert.equal(await chatPage.locator('.markdown-content strong', { hasText: 'Markdown works' }).count(), 1)
     assert.equal(await chatPage.locator('.tool-card', { hasText: 'webSearch' }).count(), 1)
+    const toolDetails = chatPage.locator('.tool-details').first()
+    assert.equal(await toolDetails.evaluate((element) => element.open), false)
+    assert.equal(await chatPage.locator('.tool-summary', { hasText: 'Example source' }).count(), 1)
+    await toolDetails.locator('summary').click()
+    assert.equal(await toolDetails.evaluate((element) => element.open), true)
     assert.equal(await chatPage.locator('.source-citation[href="https://example.com/research"]').count(), 1)
     assert.equal(chatRequests.length, 1)
     assert.equal(chatRequests[0].tools.enabled.webSearch, true)
@@ -714,9 +753,14 @@ try {
       const sidebar = document.querySelector('.lab-sidebar')?.getBoundingClientRect()
       const actions = [...document.querySelectorAll('.workspace-actions .button')].map((element) => ({
         width: Math.round(element.getBoundingClientRect().width),
+        height: Math.round(element.getBoundingClientRect().height),
         text: element.textContent?.trim() || '',
-      }))
+      })).filter((action) => action.width > 0 && action.height > 0)
       const modelSwitcher = document.querySelector('.toolbar-model-switcher')?.getBoundingClientRect()
+      const brand = document.querySelector('.mobile-brand-lockup')?.getBoundingClientRect()
+      const statusChips = [...document.querySelectorAll('.strip-meter > span')]
+        .filter((element) => getComputedStyle(element).display !== 'none')
+        .map((element) => element.getBoundingClientRect().right)
       return {
         consoleTop: consoleMain?.top ?? -1,
         sidebarTop: sidebar?.top ?? -1,
@@ -724,15 +768,69 @@ try {
         viewportWidth: window.innerWidth,
         actions,
         modelSwitcherWidth: modelSwitcher?.width ?? 0,
+        brandTop: brand?.top ?? -1,
+        brandBottom: brand?.bottom ?? -1,
+        statusChips,
       }
     })
     assert.ok(readyMobileLayout.consoleTop <= 1, `ready mobile should open on chat workspace, got console top ${readyMobileLayout.consoleTop}`)
     assert.ok(readyMobileLayout.sidebarTop >= readyMobileLayout.viewportHeight - 1, `ready mobile rail should sit below chat, got top ${readyMobileLayout.sidebarTop}`)
     assert.ok(readyMobileLayout.modelSwitcherWidth > 0 && readyMobileLayout.modelSwitcherWidth <= readyMobileLayout.viewportWidth - 20, `mobile model switcher should fit the viewport, got ${JSON.stringify(readyMobileLayout)}`)
-    assert.ok(readyMobileLayout.actions.length >= 5, `mobile toolbar should include fetch, controls, tools, compare, diagnose; got ${JSON.stringify(readyMobileLayout.actions)}`)
-    assert.ok(readyMobileLayout.actions.every((action) => action.width <= 44), `mobile advanced actions should be compact, got ${JSON.stringify(readyMobileLayout.actions)}`)
+    assert.deepEqual(readyMobileLayout.actions.map((action) => action.text), ['Fetch', 'More'])
+    assert.ok(readyMobileLayout.actions.every((action) => action.height >= 44), `mobile toolbar actions should meet 44px touch targets, got ${JSON.stringify(readyMobileLayout.actions)}`)
+    assert.ok(readyMobileLayout.brandTop >= 0 && readyMobileLayout.brandBottom <= readyMobileLayout.viewportHeight, `mobile product identity should be visible: ${JSON.stringify(readyMobileLayout)}`)
+    assert.ok(readyMobileLayout.statusChips.every((right) => right <= readyMobileLayout.viewportWidth + 1), `ready mobile status chips should not clip: ${JSON.stringify(readyMobileLayout.statusChips)}`)
 
-    await mobileReadyPage.getByRole('button', { name: 'Tools', exact: true }).click()
+    const moreButton = mobileReadyPage.getByRole('button', { name: 'More', exact: true })
+    await moreButton.click()
+    const mobileActionsDialog = mobileReadyPage.getByRole('dialog', { name: 'More actions' })
+    await mobileActionsDialog.waitFor({ timeout: 10_000 })
+    assert.equal(await mobileReadyPage.evaluate(() => document.activeElement?.textContent?.trim()), 'Run controls')
+    await mobileReadyPage.keyboard.press('Shift+Tab')
+    assert.equal(await mobileReadyPage.evaluate(() => document.activeElement?.getAttribute('aria-label')), 'Close more actions')
+    await mobileReadyPage.keyboard.press('Shift+Tab')
+    assert.equal(await mobileReadyPage.evaluate(() => document.activeElement?.textContent?.trim()), 'Delete thread')
+    await mobileReadyPage.keyboard.press('Tab')
+    assert.equal(await mobileReadyPage.evaluate(() => document.activeElement?.getAttribute('aria-label')), 'Close more actions')
+    await mobileReadyPage.keyboard.press('Escape')
+    await mobileActionsDialog.waitFor({ state: 'detached', timeout: 10_000 })
+    assert.equal(await moreButton.evaluate((element) => document.activeElement === element), true)
+
+    await moreButton.click()
+    await mobileReadyPage.locator('.mobile-actions-backdrop').click({ position: { x: 4, y: 4 } })
+    await mobileActionsDialog.waitFor({ state: 'detached', timeout: 10_000 })
+    assert.equal(await moreButton.evaluate((element) => document.activeElement === element), true)
+
+    await moreButton.click()
+    await mobileReadyPage.setViewportSize({ width: 900, height: 844 })
+    await mobileActionsDialog.waitFor({ state: 'detached', timeout: 10_000 })
+    assert.equal(await moreButton.getAttribute('aria-expanded'), 'false')
+    await mobileReadyPage.setViewportSize({ width: 390, height: 844 })
+
+    await moreButton.click()
+    await mobileActionsDialog.getByRole('button', { name: 'Archive thread', exact: true }).click()
+    const mobileArchiveDialog = mobileReadyPage.getByRole('dialog', { name: 'Archive thread?' })
+    await mobileArchiveDialog.waitFor({ timeout: 10_000 })
+    assert.equal(await mobileReadyPage.evaluate(() => document.activeElement?.textContent?.trim()), 'Cancel')
+    await mobileReadyPage.keyboard.press('Shift+Tab')
+    assert.equal(await mobileReadyPage.evaluate(() => document.activeElement?.textContent?.trim()), 'Archive')
+    await mobileReadyPage.keyboard.press('Tab')
+    assert.equal(await mobileReadyPage.evaluate(() => document.activeElement?.textContent?.trim()), 'Cancel')
+    await mobileReadyPage.keyboard.press('Escape')
+    await mobileArchiveDialog.waitFor({ state: 'detached', timeout: 10_000 })
+    assert.equal(await moreButton.evaluate((element) => document.activeElement === element), true)
+
+    await mobileReadyPage.setViewportSize({ width: 375, height: 812 })
+    const narrowMobileLayout = await mobileReadyPage.evaluate(() => ({
+      documentWidth: document.documentElement.scrollWidth,
+      viewportWidth: window.innerWidth,
+      privacyDisplay: getComputedStyle(document.querySelector('.privacy-pill')).display,
+    }))
+    assert.ok(narrowMobileLayout.documentWidth <= narrowMobileLayout.viewportWidth + 1, `375px mobile layout should not overflow: ${JSON.stringify(narrowMobileLayout)}`)
+    assert.equal(narrowMobileLayout.privacyDisplay, 'none')
+
+    await moreButton.click()
+    await mobileReadyPage.getByRole('dialog', { name: 'More actions' }).getByRole('button', { name: 'Tools', exact: true }).click()
     await mobileReadyPage.locator('.workspace-panel[aria-label="Tools"]').waitFor({ timeout: 10_000 })
     const panelLayout = await mobileReadyPage.locator('.workspace-panel[aria-label="Tools"]').evaluate((element) => {
       const rect = element.getBoundingClientRect()
@@ -778,11 +876,13 @@ try {
     localStorage.setItem('byok.chat.activeProfile.v1', profile.id)
   })
 
+  let chatErrorRequests = 0
   await chatErrorPage.route('**/api/chat', async (route) => {
+    chatErrorRequests += 1
     await route.fulfill({
       status: 400,
       contentType: 'application/json; charset=utf-8',
-      body: JSON.stringify({ error: { message: 'Provider rejected this chat model' } }),
+      body: JSON.stringify({ error: { message: chatErrorRequests === 1 ? 'Provider rejected this chat model' : 'Provider rejected this chat model again' } }),
     })
   })
 
@@ -793,6 +893,23 @@ try {
     await chatErrorPage.getByTitle('Send message').click()
 
     await chatErrorPage.getByText('Provider rejected this chat model').waitFor({ timeout: 10_000 })
+    const recovery = chatErrorPage.locator('.message-error').last()
+    assert.equal(await recovery.getByRole('button', { name: 'Retry', exact: true }).count(), 1)
+    assert.equal(await recovery.getByRole('button', { name: 'Choose another model', exact: true }).count(), 1)
+    assert.equal(await recovery.getByRole('button', { name: 'Endpoint settings', exact: true }).count(), 1)
+    await recovery.getByRole('button', { name: 'Retry', exact: true }).click()
+    await waitForCondition(() => chatErrorRequests === 2, 'error recovery should retry the failed request')
+    await chatErrorPage.getByText('Provider rejected this chat model again', { exact: true }).waitFor({ timeout: 10_000 })
+    assert.equal(await chatErrorPage.locator('.message-assistant').count(), 1)
+    assert.equal(await chatErrorPage.locator('.message-error-state').count(), 1)
+    assert.equal(await chatErrorPage.getByText('Provider rejected this chat model', { exact: true }).count(), 0)
+    assert.equal(await chatErrorPage.locator('.message-error-state').getByRole('button', { name: 'Retry', exact: true }).count(), 1)
+    await chatErrorPage.locator('.message-error').last().getByRole('button', { name: 'Choose another model', exact: true }).click()
+    await chatErrorPage.locator('.workspace-panel[aria-label="Run controls"]').waitFor({ timeout: 10_000 })
+    await chatErrorPage.getByTitle('Close Run controls').click()
+    await chatErrorPage.locator('.message-error').last().getByRole('button', { name: 'Endpoint settings', exact: true }).click()
+    await chatErrorPage.locator('.endpoint-drawer[aria-label="Endpoint setup"]').waitFor({ timeout: 10_000 })
+    await chatErrorPage.getByTitle('Close endpoint').click()
     assert.deepEqual(chatErrorEvents, [])
 
     const path = caseScreenshotPath('chat-error')
@@ -879,6 +996,8 @@ try {
     assert.equal(mediaRequests[0].mode, 'image_generation')
     assert.equal(mediaRequests[0].model, 'gpt-image-2')
     assert.equal(mediaRequests[0].prompt, 'ufo flying over 70s hong kong skyline')
+    assert.equal(await mediaPage.locator('.message-assistant .run-meta span').count(), 0)
+    assert.equal(await mediaPage.getByText(/n\/a/i).count(), 0)
     assert.deepEqual(mediaEvents, [])
 
     const path = caseScreenshotPath('media')
@@ -897,8 +1016,15 @@ try {
       await legalPage.locator('.legal-document').waitFor({ timeout: 10_000 })
       assert.equal(await legalPage.locator('.legal-shell').count(), 1)
       assert.ok((await legalPage.title()).includes('BYOK Chat'))
-      const width = await legalPage.evaluate(() => ({ document: document.documentElement.scrollWidth, viewport: innerWidth }))
+      const width = await legalPage.evaluate(() => ({
+        document: document.documentElement.scrollWidth,
+        viewport: innerWidth,
+        touchTargets: [...document.querySelectorAll('.legal-nav a, .legal-footer button')]
+          .filter((element) => getComputedStyle(element).display !== 'none')
+          .map((element) => element.getBoundingClientRect().height),
+      }))
       assert.ok(width.document <= width.viewport + 1, `${legalPath} should not overflow horizontally: ${JSON.stringify(width)}`)
+      assert.ok(width.touchTargets.every((height) => height >= 44), `${legalPath} navigation should meet 44px touch targets: ${JSON.stringify(width.touchTargets)}`)
     }
     console.log(`browser smoke legal pages ok: ${baseUrl}`)
   } finally {

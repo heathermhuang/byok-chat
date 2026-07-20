@@ -1,11 +1,11 @@
 {
   "name": "BYOK Chat",
   "short_name": "BYOK",
-  "description": "Private, browser-local workspace for your own model provider keys.",
+  "description": "Bring Your Own Key: use an AI provider account you control in a private, browser-local workspace.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f8f6f1",
-  "theme_color": "#f8f6f1",
+  "theme_color": "#0d5b4d",
   "icons": [
     {
       "src": "/favicon.svg",

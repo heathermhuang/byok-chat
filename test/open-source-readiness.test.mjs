@@ -44,6 +44,15 @@ test('ships public contribution and security governance', () => {
   assert.equal(JSON.parse(read('package.json')).license, 'Apache-2.0')
 })
 
+test('links the product UI to its public GitHub repository', () => {
+  const app = read('src/App.tsx')
+
+  assert.match(app, /href="https:\/\/github\.com\/heathermhuang\/byok-chat"/)
+  assert.match(app, /<strong>Open source<\/strong>/)
+  assert.match(app, /View BYOK Chat on GitHub/)
+  assert.match(app, /function GitHubMark/)
+})
+
 test('keeps the official legal identity explicit and separate from self-hosting defaults', () => {
   const officialEnv = read('.env.official')
   const packageJson = JSON.parse(read('package.json'))
