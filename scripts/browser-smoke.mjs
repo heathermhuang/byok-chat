@@ -804,7 +804,7 @@ try {
     await moreButton.click()
     await mobileReadyPage.setViewportSize({ width: 900, height: 844 })
     await mobileActionsDialog.waitFor({ state: 'detached', timeout: 10_000 })
-    assert.equal(await moreButton.getAttribute('aria-expanded'), 'false')
+    assert.equal(await mobileReadyPage.locator('.mobile-more-trigger').getAttribute('aria-expanded'), 'false')
     await mobileReadyPage.setViewportSize({ width: 390, height: 844 })
 
     await moreButton.click()
