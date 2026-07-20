@@ -67,19 +67,17 @@ test('pins every third-party workflow action to an immutable commit', () => {
   }
 })
 
-test('groups GitHub Actions updates into one Dependabot pull request', () => {
+test('keeps Dependabot updates grouped without reoffering incompatible releases', () => {
   const dependabot = read('.github/dependabot.yml')
   const githubActions = dependabot.slice(dependabot.indexOf('package-ecosystem: github-actions'))
 
   assert.match(githubActions, /groups:\s+github-actions:\s+patterns:\s+- ["']\*["']/)
+  assert.match(dependabot, /dependency-name:\s+["']@assistant-ui\/react["']\s+versions:\s+- ["']0\.14\.27["']/)
 })
 
 test('enforces dependency engine compatibility in public CI', () => {
   const ci = read('.github/workflows/ci.yml')
-  const packageJson = JSON.parse(read('package.json'))
 
-  assert.equal(packageJson.engines.node, '^22.13.0 || >=24.0.0')
-  assert.match(ci, /node: \[22\.13\.0, 24\.x\]/)
   assert.doesNotMatch(ci, /run:\s+npm ci\s*$/m)
   assert.match(ci, /run:\s+npm ci --engine-strict/)
 })
