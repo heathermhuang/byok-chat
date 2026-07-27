@@ -87,7 +87,7 @@ Self-hosters are responsible for their domains, Cloudflare settings, legal notic
 
 The tracked `wrangler.toml` and `wrangler.staging.toml` files target the official BYOK Chat domains and are for maintainers only. Contributors must not deploy to those domains.
 
-The official hosted service is operated by Heatherm Huang. Public legal and privacy correspondence goes to [heathermhuang@gmail.com](mailto:heathermhuang@gmail.com). Those public build-time values live in `.env.official`; self-hosters must provide their own identity instead of using that file.
+The official hosted service is operated by Byok.Chat. Public legal, privacy, and support correspondence goes to [support@byok.chat](mailto:support@byok.chat). Those public build-time values live in `.env.official`; self-hosters must provide their own identity instead of using that file.
 
 Maintainer staging deployment:
 
@@ -111,7 +111,7 @@ Operators must provision and test the displayed privacy mailbox, identify the re
 
 ## License
 
-BYOK Chat is licensed under the [Apache License 2.0](LICENSE). Copyright 2026 Heatherm Huang.
+BYOK Chat is licensed under the [Apache License 2.0](LICENSE). Copyright 2026 Byok.Chat.
 
 The license does not grant rights to BYOK Chat names, logos, or branding except as required to describe the software's origin.
 

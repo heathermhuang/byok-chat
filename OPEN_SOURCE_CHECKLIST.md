@@ -5,8 +5,8 @@ Use this checklist when publishing or materially updating the public repository.
 ## Legal and identity
 
 - [x] Select an OSI-approved project license and add `LICENSE` plus package/README metadata: Apache-2.0.
-- [x] Confirm the person operating the project: Heatherm Huang.
-- [x] Confirm the public legal/security contact: `heathermhuang@gmail.com`.
+- [x] Confirm the project operator and copyright holder: Byok.Chat.
+- [x] Confirm the public legal/security contact: `support@byok.chat`.
 - [ ] Recommended: have qualified counsel review the hosted-service privacy policy, terms, cookies policy, and chosen software license for the intended jurisdictions and business model.
 - [x] Add an unaffiliated-provider trademark notice to the README.
 
@@ -14,7 +14,7 @@ Use this checklist when publishing or materially updating the public repository.
 
 - [x] Remove local paths, temporary artifacts, private infrastructure names, deployment version identifiers, and agent-memory metadata from the public tree.
 - [x] Decide whether to publish the existing history, rewrite it, or publish a clean source snapshot: publish one clean root commit and retain the prior history only in a local bundle.
-- [x] Ensure commit author identity and email exposure are intentional: Heatherm Huang `<heathermhuang@gmail.com>`.
+- [x] Ensure the public release commit identity is intentional: Byok.Chat `<support@byok.chat>`.
 - [x] Run Gitleaks across every ref that will become public.
 - [ ] Confirm no unwanted branches, tags, releases, Actions artifacts, or repository variables will become public.
 

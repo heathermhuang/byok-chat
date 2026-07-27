@@ -14,7 +14,7 @@ Use GitHub's private vulnerability reporting flow at:
 
 `https://github.com/heathermhuang/byok-chat/security/advisories/new`
 
-If GitHub private reporting is unavailable, email `heathermhuang@gmail.com` with `[BYOK Chat security]` in the subject. Do not include live credentials or private prompt content in the first message.
+If GitHub private reporting is unavailable, email `support@byok.chat` with `[BYOK Chat security]` in the subject. Do not include live credentials or private prompt content in the first message.
 
 Include:
 

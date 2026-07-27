@@ -5,8 +5,8 @@ import { openPrivacySettings } from '../lib/privacy'
 export type LegalPageKind = 'privacy' | 'terms' | 'cookies'
 
 const EFFECTIVE_DATE = 'July 15, 2026'
-const OPERATOR_NAME = import.meta.env.VITE_OPERATOR_NAME?.trim() || 'BYOK Chat'
-const CONTACT_EMAIL = import.meta.env.VITE_LEGAL_CONTACT_EMAIL?.trim() || 'privacy@byok.chat'
+const OPERATOR_NAME = import.meta.env.VITE_OPERATOR_NAME?.trim() || 'Byok.Chat'
+const CONTACT_EMAIL = import.meta.env.VITE_LEGAL_CONTACT_EMAIL?.trim() || 'support@byok.chat'
 
 export function legalPageKind(pathname: string): LegalPageKind | null {
   const normalized = pathname.replace(/\/+$/, '') || '/'
