@@ -22,7 +22,7 @@
     "verify:public-env": "node scripts/check-public-env.mjs"
   },
   "engines": {
-    "node": "^20.19.0 || ^22.12.0 || >=24.0.0"
+    "node": "^22.22.2 || ^24.15.0 || >=26.0.0"
   },
   "repository": {
     "type": "git",
@@ -40,21 +40,21 @@
     "react"
   ],
   "dependencies": {
-    "@assistant-ui/react": "^0.14.26",
-    "lucide-react": "^1.25.0",
-    "react": "^19.2.7",
-    "react-dom": "^19.2.7",
+    "@assistant-ui/react": "^0.14.28",
+    "lucide-react": "^1.27.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
-    "unpdf": "^1.6.2"
+    "unpdf": "^1.8.0"
   },
   "devDependencies": {
     "@types/node": "^26.1.1",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-react": "^6.0.3",
-    "jsdom": "^29.1.1",
-    "playwright": "^1.61.1",
+    "@vitejs/plugin-react": "^6.0.4",
+    "jsdom": "^30.0.0",
+    "playwright": "^1.62.0",
     "tsx": "^4.23.1",
     "typescript": "^7.0.2",
     "vite": "^8.1.5",

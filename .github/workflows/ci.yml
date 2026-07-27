@@ -22,7 +22,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node: [20.19.0, 22.12.0, 24.x]
+        node: [22.22.2, 24.15.0, 26.0.0, 26.x]
     steps:
       - name: Check out source
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -35,7 +35,7 @@ jobs:
       - run: npm test
       - run: npm run build
       - name: Validate Cloudflare deployment configs
-        if: matrix.node == '24.x'
+        if: matrix.node == '26.x'
         env:
           WRANGLER_LOG_PATH: /tmp/wrangler-deploy-dry-run.log
           WRANGLER_SEND_METRICS: "false"
@@ -52,7 +52,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: 22.12.0
+          node-version: 22.22.2
           cache: npm
       - run: npm ci
       - run: npm audit --audit-level=high

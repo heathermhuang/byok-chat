@@ -39,7 +39,8 @@ Provider requests are limited to the model, chat, image, and video paths impleme
 
 ## Local development
 
-BYOK Chat supports Node.js `20.19+`, `22.12+`, and `24+`.
+BYOK Chat supports Node.js `22.22.2+` on the Node 22 line, `24.15.0+` on the
+Node 24 line, and Node.js `26+`.
 
 ```bash
 nvm use
