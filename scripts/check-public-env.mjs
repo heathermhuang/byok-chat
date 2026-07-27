@@ -3,6 +3,7 @@ import { pathToFileURL } from 'node:url'
 
 const PLACEHOLDER_DOMAINS = ['example.com', 'example.org', 'example.net', 'invalid', 'test', 'localhost', 'local']
 const OFFICIAL_OPERATOR_NAME = 'Byok.Chat'
+const OFFICIAL_CONTACT_EMAIL = 'support@byok.chat'
 
 function isPlaceholderDomain(domain) {
   return PLACEHOLDER_DOMAINS.some((placeholder) => domain === placeholder || domain.endsWith(`.${placeholder}`))
@@ -12,11 +13,11 @@ export function validatePublicEnv(env = process.env) {
   const errors = []
   const operatorName = String(env.VITE_OPERATOR_NAME || '').trim()
   const legalEmail = String(env.VITE_LEGAL_CONTACT_EMAIL || '').trim().toLowerCase()
-  const isOfficialOperator = operatorName === OFFICIAL_OPERATOR_NAME
+  const isOfficialIdentity = operatorName === OFFICIAL_OPERATOR_NAME && legalEmail === OFFICIAL_CONTACT_EMAIL
 
   if (
     !operatorName ||
-    (!isOfficialOperator && /^byok[.\s]chat$/i.test(operatorName)) ||
+    (!isOfficialIdentity && /^byok[.\s]chat$/i.test(operatorName)) ||
     /your legal operator/i.test(operatorName) ||
     /\bexample (?:labs?|company|operator)\b/i.test(operatorName)
   ) {
