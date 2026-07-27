@@ -76,23 +76,27 @@ test('pins every third-party workflow action to an immutable commit', () => {
   }
 })
 
-test('keeps Dependabot updates grouped without reoffering incompatible releases', () => {
+test('keeps Dependabot updates grouped by dependency type', () => {
   const dependabot = read('.github/dependabot.yml')
   const githubActions = dependabot.slice(dependabot.indexOf('package-ecosystem: github-actions'))
 
   assert.match(githubActions, /groups:\s+github-actions:\s+patterns:\s+- ["']\*["']/)
-  assert.match(dependabot, /dependency-name:\s+["']@assistant-ui\/react["']\s+versions:\s+- ["']0\.14\.27["']/)
+  assert.match(dependabot, /production-dependencies:\s+dependency-type:\s+production/)
+  assert.match(dependabot, /development-dependencies:\s+dependency-type:\s+development/)
+  assert.doesNotMatch(dependabot, /dependency-name:\s+["']@assistant-ui\/react["']\s+versions:\s+- ["']0\.14\.27["']/)
 })
 
-test('keeps the assistant UI dependency graph compatible with Node 20', () => {
+test('enforces the Node runtime contract used by dependency installs and CI', () => {
   const packageJson = JSON.parse(read('package.json'))
-  const packageLock = JSON.parse(read('package-lock.json'))
+  const npmConfig = read('.npmrc')
+  const ci = read('.github/workflows/ci.yml')
 
-  assert.match(packageJson.engines.node, /\^20\.19\.0/)
-  assert.equal(packageJson.dependencies['@assistant-ui/react'], '^0.14.26')
-  assert.equal(packageLock.packages['node_modules/@assistant-ui/core'].version, '0.2.20')
-  assert.equal(packageLock.packages['node_modules/assistant-stream'].version, '0.3.25')
-  assert.equal(packageLock.packages['node_modules/nanoid'].version, '5.1.16')
+  assert.equal(packageJson.engines.node, '^22.22.2 || ^24.15.0 || >=26.0.0')
+  assert.equal(read('.nvmrc').trim(), '22.22.2')
+  assert.match(npmConfig, /^engine-strict=true$/m)
+  assert.match(ci, /node: \[22\.22\.2, 24\.15\.0, 26\.0\.0, 26\.x\]/)
+  assert.match(ci, /node-version: 22\.22\.2/)
+  assert.doesNotMatch(ci, /20\.19\.0|22\.12\.0/)
 })
 
 test('keeps known private release metadata out of the public tree', () => {

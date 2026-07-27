@@ -13,7 +13,8 @@ Thank you for helping improve BYOK Chat. Changes should preserve its core bounda
 
 Requirements:
 
-- Node.js `20.19+`, `22.12+`, or `24+`;
+- Node.js `22.22.2+` on the Node 22 line, `24.15.0+` on the Node 24 line, or
+  Node.js `26+`;
 - npm; and
 - a Cloudflare account only if you are testing your own Worker deployment.
 

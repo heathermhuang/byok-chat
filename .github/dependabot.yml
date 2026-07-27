@@ -11,10 +11,6 @@ updates:
         dependency-type: production
       development-dependencies:
         dependency-type: development
-    ignore:
-      - dependency-name: "@assistant-ui/react"
-        versions:
-          - "0.14.27"
   - package-ecosystem: github-actions
     directory: /
     schedule:
