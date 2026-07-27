@@ -8,6 +8,7 @@ const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf
 const root = fileURLToPath(new URL('../', import.meta.url))
 const ignoredDirectories = new Set(['.git', '.gstack', '.wrangler', 'dist', 'node_modules'])
 const textExtensions = new Set(['.css', '.html', '.js', '.json', '.md', '.mjs', '.toml', '.ts', '.tsx', '.txt', '.yaml', '.yml'])
+const extensionlessTextFiles = new Set(['CODEOWNERS', 'LICENSE'])
 
 function publicTextFiles(directory = root) {
   const files = []
@@ -16,7 +17,12 @@ function publicTextFiles(directory = root) {
       if (!ignoredDirectories.has(entry.name)) files.push(...publicTextFiles(resolve(directory, entry.name)))
       continue
     }
-    if (textExtensions.has(extname(entry.name)) || entry.name.startsWith('.env') || entry.name === '.gitignore') {
+    if (
+      textExtensions.has(extname(entry.name)) ||
+      extensionlessTextFiles.has(entry.name) ||
+      entry.name.startsWith('.env') ||
+      entry.name === '.gitignore'
+    ) {
       files.push(resolve(directory, entry.name))
     }
   }
@@ -55,10 +61,15 @@ test('links the product UI to its public GitHub repository', () => {
 
 test('keeps the official legal identity explicit and separate from self-hosting defaults', () => {
   const officialEnv = read('.env.official')
+  const legalPage = read('src/components/LegalPage.tsx')
   const packageJson = JSON.parse(read('package.json'))
 
-  assert.match(officialEnv, /^VITE_OPERATOR_NAME="Heatherm Huang"$/m)
-  assert.match(officialEnv, /^VITE_LEGAL_CONTACT_EMAIL=heathermhuang@gmail\.com$/m)
+  assert.match(officialEnv, /^VITE_OPERATOR_NAME="Byok\.Chat"$/m)
+  assert.match(officialEnv, /^VITE_LEGAL_CONTACT_EMAIL=support@byok\.chat$/m)
+  assert.match(legalPage, /\|\| 'Byok\.Chat'/)
+  assert.match(legalPage, /\|\| 'support@byok\.chat'/)
+  assert.match(read('README.md'), /Copyright 2026 Byok\.Chat/)
+  assert.match(read('SECURITY.md'), /email `support@byok\.chat`/)
   assert.match(packageJson.scripts['build:official'], /--mode official/)
   assert.match(packageJson.scripts['deploy:self-hosted'], /verify:public-env/)
   assert.match(packageJson.scripts['deploy:staging'], /verify:official-env/)
@@ -101,11 +112,16 @@ test('enforces the Node runtime contract used by dependency installs and CI', ()
 
 test('keeps known private release metadata out of the public tree', () => {
   const combined = publicTextFiles().map((file) => readFileSync(file, 'utf8')).join('\n')
+  const normalized = combined.toLowerCase()
   const privateHome = ['/Users', 'heatherm'].join('/')
   const privateEndpoint = new RegExp(`${['sg', 'codex'].join('-')}|${['vpn', 'vc'].join('\\.')}`, 'i')
   const injectedMemory = ['<claude', 'mem', 'context>'].join('-')
+  const formerOperator = ['Heatherm', 'Huang'].join(' ')
+  const formerMailbox = ['heathermhuang', 'gmail.com'].join('@')
 
   assert.equal(combined.includes(privateHome), false)
   assert.doesNotMatch(combined, privateEndpoint)
   assert.equal(combined.includes(injectedMemory), false)
+  assert.equal(normalized.includes(formerOperator.toLowerCase()), false)
+  assert.equal(normalized.includes(formerMailbox.toLowerCase()), false)
 })

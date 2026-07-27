@@ -9,6 +9,13 @@ test('accepts a configured legal operator and monitored mailbox', () => {
   }), [])
 })
 
+test('accepts the official Byok.Chat operator identity', () => {
+  assert.deepEqual(validatePublicEnv({
+    VITE_OPERATOR_NAME: 'Byok.Chat',
+    VITE_LEGAL_CONTACT_EMAIL: 'support@byok.chat',
+  }), [])
+})
+
 test('blocks missing product-name and placeholder legal identities', () => {
   assert.equal(validatePublicEnv({}).length, 2)
   assert.equal(validatePublicEnv({

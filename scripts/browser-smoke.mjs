@@ -1016,6 +1016,8 @@ try {
       await legalPage.locator('.legal-document').waitFor({ timeout: 10_000 })
       assert.equal(await legalPage.locator('.legal-shell').count(), 1)
       assert.ok((await legalPage.title()).includes('BYOK Chat'))
+      assert.ok((await legalPage.locator('.legal-footer').innerText()).includes('© 2026 Byok.Chat'))
+      assert.ok(await legalPage.locator('a[href="mailto:support@byok.chat"]').count() >= 1)
       const width = await legalPage.evaluate(() => ({
         document: document.documentElement.scrollWidth,
         viewport: innerWidth,
