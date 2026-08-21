@@ -1131,6 +1131,20 @@ function textFromProviderPayload(payload: unknown): string {
     const text = contentText(message?.content) || contentText(delta?.content) || contentText(item?.text)
     if (text) return text
   }
+  const output = Array.isArray(raw.output) ? raw.output : []
+  const finalOutput = output.filter((item) => objectValue(item)?.phase === 'final_answer')
+  for (const item of finalOutput.length ? finalOutput : output) {
+    const content = objectValue(item)?.content
+    if (!Array.isArray(content)) continue
+    const text = content
+      .map((part) => {
+        const block = objectValue(part)
+        return (block?.type === 'output_text' || block?.type === 'text') && typeof block.text === 'string' ? block.text : ''
+      })
+      .filter(Boolean)
+      .join('')
+    if (text) return text
+  }
   const content = raw.content
   if (Array.isArray(content)) {
     const text = content.map((item) => contentText(item)).filter(Boolean).join('\n')
@@ -1145,6 +1159,49 @@ function messagesWithSystem(messages: DirectChatMessage[], system: string): Dire
     { role: 'system' as const, content: [system, ...systemMessages].filter(Boolean).join('\n\n') },
     ...messages.filter((message) => message.role !== 'system'),
   ].filter((message) => message.content)
+}
+
+function usesNativeResponses(model: string): boolean {
+  return model.trim().toLowerCase().startsWith('chatgpt-web/')
+}
+
+async function responsesMessageContent(message: DirectChatMessage): Promise<Array<Record<string, unknown>>> {
+  const content = await openAiMessageContent(message)
+  const textType = message.role === 'assistant' ? 'output_text' : 'input_text'
+  if (typeof content === 'string') return content ? [{ type: textType, text: content }] : []
+  if (!Array.isArray(content)) return []
+
+  return content.map((part) => {
+    const block = objectValue(part) || {}
+    if (block.type === 'text') return { type: textType, text: typeof block.text === 'string' ? block.text : '' }
+    if (block.type === 'image_url') {
+      const image = objectValue(block.image_url) || {}
+      const imageUrl = stringValue(image.url)
+      if (!imageUrl) throw new Error('ChatGPT Web image input is missing its data URL.')
+      return { type: 'input_image', image_url: imageUrl, detail: 'auto' }
+    }
+    throw new Error('ChatGPT Web currently accepts text, image, PDF, and text-document chat inputs in BYOK Chat.')
+  }).filter((part) => part.type !== textType || Boolean(part.text))
+}
+
+async function nativeResponsesInput(messages: DirectChatMessage[], system: string, turnId: string) {
+  const completeMessages = messagesWithSystem(messages, system)
+  let currentUserIndex = -1
+  for (let index = completeMessages.length - 1; index >= 0; index -= 1) {
+    if (completeMessages[index].role === 'user') {
+      currentUserIndex = index
+      break
+    }
+  }
+
+  return Promise.all(completeMessages.map(async (message, index) => ({
+    type: 'message',
+    role: message.role,
+    content: await responsesMessageContent(message),
+    ...(index === currentUserIndex
+      ? { internal_chat_message_metadata_passthrough: { turn_id: turnId } }
+      : {}),
+  })))
 }
 
 function lastUserText(messages: DirectChatMessage[]): string {
@@ -1272,8 +1329,39 @@ async function postChatJson(options: {
   const started = Date.now()
   let upstream: Response
   const generationParams = normalizeGenerationParams(options.generationParams)
+  const nativeResponses = usesNativeResponses(options.model)
 
-  if (provider.apiFormat === 'anthropic-messages') {
+  if (nativeResponses) {
+    const threadId = `thread_byok_chat_${crypto.randomUUID().replaceAll('-', '')}`
+    const turnId = `turn_byok_chat_${crypto.randomUUID().replaceAll('-', '')}`
+    const turnMetadata = JSON.stringify({ thread_id: threadId, turn_id: turnId })
+    const input = await nativeResponsesInput(options.messages, options.system, turnId)
+    upstream = await fetchWithoutRedirects(upstreamFetch, `${buildApiBaseUrl(options.baseUrl, provider.id)}/responses`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${options.apiKey.trim()}`,
+        accept: 'application/json',
+        'content-type': 'application/json',
+        'http-referer': 'https://byok.chat',
+        'x-title': 'Byok Chat',
+        'user-agent': 'Byok-Chat/0.1',
+        'x-codex-turn-metadata': turnMetadata,
+      },
+      body: JSON.stringify({
+        model: options.model,
+        client_metadata: { 'x-codex-turn-metadata': turnMetadata },
+        input,
+        stream: false,
+        max_output_tokens: generationParams.maxTokens,
+        temperature: generationParams.temperature,
+        top_p: generationParams.topP,
+        frequency_penalty: generationParams.frequencyPenalty,
+        presence_penalty: generationParams.presencePenalty,
+        reasoning: generationParams.reasoningEffort ? { effort: generationParams.reasoningEffort } : undefined,
+        text: generationParams.verbosity ? { verbosity: generationParams.verbosity } : undefined,
+      }),
+    })
+  } else if (provider.apiFormat === 'anthropic-messages') {
     const directMessages = options.messages
       .filter((message) => message.role !== 'system')
       .map((message) => ({ role: message.role, content: anthropicMessageContent(message) }))
@@ -1334,6 +1422,17 @@ async function postChatJson(options: {
     }
   }
   const payload = tryJson(text)
+  if (nativeResponses && objectValue(payload)?.status !== 'completed') {
+    const responseError = objectValue(objectValue(payload)?.error)
+    const message = scrubSensitiveText(stringValue(responseError?.message) || 'ChatGPT Web Responses request failed')
+    return {
+      ok: false as const,
+      status: 502,
+      latencyMs,
+      message,
+      diagnostic: diagnosticForStatus(502, message),
+    }
+  }
   return {
     ok: true as const,
     status: upstream.status,

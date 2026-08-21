@@ -112,6 +112,101 @@ test('returns JSON chat text with usage metadata for persistent threads', async 
   assert.equal(body.metadata.totalTokens, 13)
 })
 
+test('routes chatgpt-web models through the native Responses metadata contract', async () => {
+  const requests = []
+  const response = await worker.fetch(new Request('https://byok.chat/api/chat-json', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      ...chatRequestBody({
+        profile: {
+          provider: 'sub2api',
+          baseUrl: 'https://gateway.example.com/v1',
+          model: 'chatgpt-web/high',
+        },
+      }),
+      messages: [
+        { role: 'system', content: 'Keep the answer exact.' },
+        { role: 'user', content: 'Earlier question' },
+        { role: 'assistant', content: 'Earlier answer' },
+        { role: 'user', content: 'Reply with exactly: BRIDGE-READY' },
+      ],
+    }),
+  }), {
+    ASSETS: { fetch: async () => new Response('asset') },
+    UPSTREAM_FETCH: async (input, init) => {
+      const request = input instanceof Request ? input : new Request(input, init)
+      requests.push({
+        path: new URL(request.url).pathname,
+        authorization: request.headers.get('authorization'),
+        turnMetadata: request.headers.get('x-codex-turn-metadata'),
+        redirect: request.redirect,
+        body: await request.json(),
+      })
+      return new Response(JSON.stringify({
+        id: 'resp_bridge',
+        status: 'completed',
+        model: 'chatgpt-web/high',
+        output: [{
+          type: 'message',
+          role: 'assistant',
+          phase: 'final_answer',
+          content: [{ type: 'output_text', text: 'BRIDGE-READY' }],
+        }],
+        usage: { input_tokens: 12, output_tokens: 3, total_tokens: 15 },
+      }), { headers: { 'content-type': 'application/json' } })
+    },
+  })
+  const body = await response.json()
+
+  assert.equal(response.status, 200)
+  assert.equal(requests.length, 1)
+  assert.equal(requests[0].path, '/v1/responses')
+  assert.equal(requests[0].authorization, 'Bearer test-key')
+  assert.equal(requests[0].redirect, 'manual')
+  const metadata = JSON.parse(requests[0].turnMetadata)
+  assert.match(metadata.thread_id, /^thread_byok_chat_/)
+  assert.match(metadata.turn_id, /^turn_byok_chat_/)
+  assert.equal(requests[0].body.client_metadata['x-codex-turn-metadata'], requests[0].turnMetadata)
+  assert.equal(requests[0].body.input[0].role, 'system')
+  assert.equal(requests[0].body.input[2].role, 'assistant')
+  assert.deepEqual(requests[0].body.input[2].content, [{ type: 'output_text', text: 'Earlier answer' }])
+  assert.equal(requests[0].body.input.at(-1).internal_chat_message_metadata_passthrough.turn_id, metadata.turn_id)
+  assert.deepEqual(requests[0].body.input.at(-1).content, [{ type: 'input_text', text: 'Reply with exactly: BRIDGE-READY' }])
+  assert.equal(requests[0].body.stream, false)
+  assert.equal(body.text, 'BRIDGE-READY')
+  assert.equal(body.metadata.inputTokens, 12)
+  assert.equal(body.metadata.outputTokens, 3)
+  assert.equal(body.metadata.totalTokens, 15)
+})
+
+test('surfaces a failed native Responses object as an upstream chat error', async () => {
+  const response = await worker.fetch(new Request('https://byok.chat/api/chat-json', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(chatRequestBody({
+      profile: {
+        provider: 'custom',
+        baseUrl: 'https://gateway.example.com/v1',
+        model: 'chatgpt-web/high',
+      },
+    })),
+  }), {
+    ASSETS: { fetch: async () => new Response('asset') },
+    UPSTREAM_FETCH: async () => new Response(JSON.stringify({
+      id: 'resp_failed',
+      status: 'failed',
+      error: { type: 'upstream_error', message: 'Browser turn did not complete.' },
+      output: [],
+    }), { headers: { 'content-type': 'application/json' } }),
+  })
+  const body = await response.json()
+
+  assert.equal(response.status, 502)
+  assert.equal(body.error.message, 'Browser turn did not complete.')
+  assert.match(body.diagnostic, /upstream error/i)
+})
+
 test('forwards advanced OpenAI-compatible chat controls when configured', async () => {
   const requests = []
   const response = await worker.fetch(new Request('https://byok.chat/api/chat', {
@@ -345,6 +440,7 @@ for (const providerCase of [
   { name: 'Gemini OpenAI compatibility', provider: 'gemini', baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', expectedPath: '/v1beta/openai/chat/completions' },
   { name: 'xAI', provider: 'xai', baseUrl: 'https://api.x.ai/v1', expectedPath: '/v1/chat/completions' },
   { name: 'Z.ai', provider: 'zai', baseUrl: 'https://api.z.ai/api/paas/v4', expectedPath: '/api/paas/v4/chat/completions' },
+  { name: 'custom OpenAI compatibility', provider: 'custom', baseUrl: 'https://gateway.example.com/v1', expectedPath: '/v1/chat/completions' },
 ]) {
   test(`maps ${providerCase.name} chat to its official path`, async () => {
     await runProviderChatMapping(providerCase)
