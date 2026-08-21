@@ -217,8 +217,42 @@ test('fetches legacy custom-provider models from /v1 when users enter a bare cus
   assert.equal(requests[0].origin, 'https://gateway.example.com')
   assert.equal(requests[0].path, '/v1/models')
   assert.equal(requests[0].authorization, 'Bearer test-key')
-  assert.equal(requests[0].redirect, 'error')
+  assert.equal(requests[0].redirect, 'manual')
   assert.equal(body.data[0].id, 'gpt-4o')
+})
+
+test('rejects provider redirects without following credential-bearing requests', async () => {
+  const requests = []
+  const response = await worker.fetch(new Request('https://byok.chat/api/models', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      provider: 'sub2api',
+      baseUrl: 'https://gateway.example.com/v1',
+      apiKey: 'test-key',
+    }),
+  }), {
+    ...env,
+    UPSTREAM_FETCH: async (input, init) => {
+      const request = input instanceof Request ? input : new Request(input, init)
+      requests.push({
+        authorization: request.headers.get('authorization'),
+        redirect: request.redirect,
+      })
+      return new Response('redirect target must stay private', {
+        status: 302,
+        headers: { location: 'https://redirect-target.example/models' },
+      })
+    },
+  })
+  const body = await response.json()
+
+  assert.equal(response.status, 400)
+  assert.equal(requests.length, 1)
+  assert.equal(requests[0].authorization, 'Bearer test-key')
+  assert.equal(requests[0].redirect, 'manual')
+  assert.equal(body.error.message, 'Upstream redirects are not allowed.')
+  assert.doesNotMatch(JSON.stringify(body), /redirect-target\.example/)
 })
 
 test('rejects non-public provider base URLs before fetching upstream', async (t) => {

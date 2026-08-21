@@ -183,14 +183,26 @@ async function readBody<T>(request: Request): Promise<T> {
   }
 }
 
+async function fetchWithoutRedirects(
+  upstreamFetch: typeof fetch,
+  input: string,
+  init: RequestInit = {},
+): Promise<Response> {
+  const response = await upstreamFetch(input, { ...init, redirect: 'manual' })
+  if (response.status >= 300 && response.status < 400) {
+    await response.body?.cancel().catch(() => undefined)
+    throw new Error('Upstream redirects are not allowed.')
+  }
+  return response
+}
+
 async function handleModels(request: Request, env: RuntimeEnv): Promise<Response> {
   const body = await readBody<{ provider?: string; baseUrl?: string; apiKey?: string }>(request)
   if (!body.apiKey?.trim()) return json({ error: { message: 'apiKey is required' } }, 400)
   const provider = getProviderPreset(body.provider)
   const endpoint = buildEndpoint(body.baseUrl || '', provider.id, 'models')
   const upstreamFetch = env.UPSTREAM_FETCH || fetch
-  const upstream = await upstreamFetch(endpoint, {
-    redirect: 'error',
+  const upstream = await fetchWithoutRedirects(upstreamFetch, endpoint, {
     headers: {
       ...(provider.apiFormat === 'anthropic-messages'
         ? {
@@ -643,9 +655,8 @@ async function postUpstreamMedia(
   const upstreamFetch = runtimeFetch(env)
   const attachments = options.attachments || []
   const multipart = (providerId === 'openai' && kind === 'videos') || Boolean(options.attachmentField && attachments.length)
-  const upstream = await upstreamFetch(options.endpoint || buildEndpoint(baseUrl, providerId, kind), {
+  const upstream = await fetchWithoutRedirects(upstreamFetch, options.endpoint || buildEndpoint(baseUrl, providerId, kind), {
     method: 'POST',
-    redirect: 'error',
     headers: {
       authorization: `Bearer ${apiKey.trim()}`,
       accept: 'application/json, text/event-stream;q=0.9, */*;q=0.8',
@@ -664,9 +675,8 @@ async function postUpstreamMedia(
 
 async function getUpstreamVideoStatus(env: RuntimeEnv, baseUrl: string, apiKey: string, providerId: string | undefined, requestId: string): Promise<UpstreamMediaResult> {
   const upstreamFetch = runtimeFetch(env)
-  const upstream = await upstreamFetch(buildVideoStatusEndpoint(baseUrl, providerId, requestId), {
+  const upstream = await fetchWithoutRedirects(upstreamFetch, buildVideoStatusEndpoint(baseUrl, providerId, requestId), {
     method: 'GET',
-    redirect: 'error',
     headers: {
       authorization: `Bearer ${apiKey.trim()}`,
       accept: 'application/json, */*;q=0.8',
@@ -770,8 +780,7 @@ async function searchWeb(env: RuntimeEnv, query: string, userSearchApiKey = '') 
   const url = new URL(env.SEARCH_API_URL || 'https://s.jina.ai/')
   url.searchParams.set('q', query)
 
-  const response = await upstreamFetch(url.toString(), {
-    redirect: 'error',
+  const response = await fetchWithoutRedirects(upstreamFetch, url.toString(), {
     headers: authHeaders(token, 'application/json, text/plain;q=0.9, */*;q=0.5'),
   })
   const { text, truncated } = await readTextLimit(response, 24_000)
@@ -875,8 +884,7 @@ async function readPublicUrl(env: RuntimeEnv, url: string, userSearchApiKey = ''
     }
   }
   const readerUrl = new URL(`https://r.jina.ai/${parsed.toString()}`)
-  const readerResponse = await upstreamFetch(readerUrl.toString(), {
-    redirect: 'error',
+  const readerResponse = await fetchWithoutRedirects(upstreamFetch, readerUrl.toString(), {
     headers: authHeaders(token, 'text/plain, text/markdown, application/json;q=0.9, */*;q=0.5'),
   })
   const readerText = await readTextLimit(readerResponse, 24_000)
@@ -1123,6 +1131,20 @@ function textFromProviderPayload(payload: unknown): string {
     const text = contentText(message?.content) || contentText(delta?.content) || contentText(item?.text)
     if (text) return text
   }
+  const output = Array.isArray(raw.output) ? raw.output : []
+  const finalOutput = output.filter((item) => objectValue(item)?.phase === 'final_answer')
+  for (const item of finalOutput.length ? finalOutput : output) {
+    const content = objectValue(item)?.content
+    if (!Array.isArray(content)) continue
+    const text = content
+      .map((part) => {
+        const block = objectValue(part)
+        return (block?.type === 'output_text' || block?.type === 'text') && typeof block.text === 'string' ? block.text : ''
+      })
+      .filter(Boolean)
+      .join('')
+    if (text) return text
+  }
   const content = raw.content
   if (Array.isArray(content)) {
     const text = content.map((item) => contentText(item)).filter(Boolean).join('\n')
@@ -1137,6 +1159,49 @@ function messagesWithSystem(messages: DirectChatMessage[], system: string): Dire
     { role: 'system' as const, content: [system, ...systemMessages].filter(Boolean).join('\n\n') },
     ...messages.filter((message) => message.role !== 'system'),
   ].filter((message) => message.content)
+}
+
+function usesNativeResponses(model: string): boolean {
+  return model.trim().toLowerCase().startsWith('chatgpt-web/')
+}
+
+async function responsesMessageContent(message: DirectChatMessage): Promise<Array<Record<string, unknown>>> {
+  const content = await openAiMessageContent(message)
+  const textType = message.role === 'assistant' ? 'output_text' : 'input_text'
+  if (typeof content === 'string') return content ? [{ type: textType, text: content }] : []
+  if (!Array.isArray(content)) return []
+
+  return content.map((part) => {
+    const block = objectValue(part) || {}
+    if (block.type === 'text') return { type: textType, text: typeof block.text === 'string' ? block.text : '' }
+    if (block.type === 'image_url') {
+      const image = objectValue(block.image_url) || {}
+      const imageUrl = stringValue(image.url)
+      if (!imageUrl) throw new Error('ChatGPT Web image input is missing its data URL.')
+      return { type: 'input_image', image_url: imageUrl, detail: 'auto' }
+    }
+    throw new Error('ChatGPT Web currently accepts text, image, PDF, and text-document chat inputs in BYOK Chat.')
+  }).filter((part) => part.type !== textType || Boolean(part.text))
+}
+
+async function nativeResponsesInput(messages: DirectChatMessage[], system: string, turnId: string) {
+  const completeMessages = messagesWithSystem(messages, system)
+  let currentUserIndex = -1
+  for (let index = completeMessages.length - 1; index >= 0; index -= 1) {
+    if (completeMessages[index].role === 'user') {
+      currentUserIndex = index
+      break
+    }
+  }
+
+  return Promise.all(completeMessages.map(async (message, index) => ({
+    type: 'message',
+    role: message.role,
+    content: await responsesMessageContent(message),
+    ...(index === currentUserIndex
+      ? { internal_chat_message_metadata_passthrough: { turn_id: turnId } }
+      : {}),
+  })))
 }
 
 function lastUserText(messages: DirectChatMessage[]): string {
@@ -1264,14 +1329,44 @@ async function postChatJson(options: {
   const started = Date.now()
   let upstream: Response
   const generationParams = normalizeGenerationParams(options.generationParams)
+  const nativeResponses = usesNativeResponses(options.model)
 
-  if (provider.apiFormat === 'anthropic-messages') {
+  if (nativeResponses) {
+    const threadId = `thread_byok_chat_${crypto.randomUUID().replaceAll('-', '')}`
+    const turnId = `turn_byok_chat_${crypto.randomUUID().replaceAll('-', '')}`
+    const turnMetadata = JSON.stringify({ thread_id: threadId, turn_id: turnId })
+    const input = await nativeResponsesInput(options.messages, options.system, turnId)
+    upstream = await fetchWithoutRedirects(upstreamFetch, `${buildApiBaseUrl(options.baseUrl, provider.id)}/responses`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${options.apiKey.trim()}`,
+        accept: 'application/json',
+        'content-type': 'application/json',
+        'http-referer': 'https://byok.chat',
+        'x-title': 'Byok Chat',
+        'user-agent': 'Byok-Chat/0.1',
+        'x-codex-turn-metadata': turnMetadata,
+      },
+      body: JSON.stringify({
+        model: options.model,
+        client_metadata: { 'x-codex-turn-metadata': turnMetadata },
+        input,
+        stream: false,
+        max_output_tokens: generationParams.maxTokens,
+        temperature: generationParams.temperature,
+        top_p: generationParams.topP,
+        frequency_penalty: generationParams.frequencyPenalty,
+        presence_penalty: generationParams.presencePenalty,
+        reasoning: generationParams.reasoningEffort ? { effort: generationParams.reasoningEffort } : undefined,
+        text: generationParams.verbosity ? { verbosity: generationParams.verbosity } : undefined,
+      }),
+    })
+  } else if (provider.apiFormat === 'anthropic-messages') {
     const directMessages = options.messages
       .filter((message) => message.role !== 'system')
       .map((message) => ({ role: message.role, content: anthropicMessageContent(message) }))
-    upstream = await upstreamFetch(buildEndpoint(options.baseUrl, provider.id, 'chat'), {
+    upstream = await fetchWithoutRedirects(upstreamFetch, buildEndpoint(options.baseUrl, provider.id, 'chat'), {
       method: 'POST',
-      redirect: 'error',
       headers: {
         'x-api-key': options.apiKey.trim(),
         'anthropic-version': '2023-06-01',
@@ -1294,9 +1389,8 @@ async function postChatJson(options: {
       role: message.role,
       content: await openAiMessageContent(message),
     })))
-    upstream = await upstreamFetch(buildEndpoint(options.baseUrl, provider.id, 'chat'), {
+    upstream = await fetchWithoutRedirects(upstreamFetch, buildEndpoint(options.baseUrl, provider.id, 'chat'), {
       method: 'POST',
-      redirect: 'error',
       headers: {
         authorization: `Bearer ${options.apiKey.trim()}`,
         accept: 'application/json',
@@ -1328,6 +1422,17 @@ async function postChatJson(options: {
     }
   }
   const payload = tryJson(text)
+  if (nativeResponses && objectValue(payload)?.status !== 'completed') {
+    const responseError = objectValue(objectValue(payload)?.error)
+    const message = scrubSensitiveText(stringValue(responseError?.message) || 'ChatGPT Web Responses request failed')
+    return {
+      ok: false as const,
+      status: 502,
+      latencyMs,
+      message,
+      diagnostic: diagnosticForStatus(502, message),
+    }
+  }
   return {
     ok: true as const,
     status: upstream.status,
@@ -1552,8 +1657,7 @@ async function handleDiagnostics(request: Request, env: RuntimeEnv): Promise<Res
     checks.push({ label: 'Models endpoint', status: 'warn', message: `${provider.label} is configured for manual model entry here.` })
   } else {
     try {
-    const upstream = await runtimeFetch(env)(buildEndpoint(baseUrl, provider.id, 'models'), {
-      redirect: 'error',
+    const upstream = await fetchWithoutRedirects(runtimeFetch(env), buildEndpoint(baseUrl, provider.id, 'models'), {
       headers: {
         ...(provider.apiFormat === 'anthropic-messages'
           ? {
