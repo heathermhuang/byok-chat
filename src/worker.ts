@@ -183,14 +183,26 @@ async function readBody<T>(request: Request): Promise<T> {
   }
 }
 
+async function fetchWithoutRedirects(
+  upstreamFetch: typeof fetch,
+  input: string,
+  init: RequestInit = {},
+): Promise<Response> {
+  const response = await upstreamFetch(input, { ...init, redirect: 'manual' })
+  if (response.status >= 300 && response.status < 400) {
+    await response.body?.cancel().catch(() => undefined)
+    throw new Error('Upstream redirects are not allowed.')
+  }
+  return response
+}
+
 async function handleModels(request: Request, env: RuntimeEnv): Promise<Response> {
   const body = await readBody<{ provider?: string; baseUrl?: string; apiKey?: string }>(request)
   if (!body.apiKey?.trim()) return json({ error: { message: 'apiKey is required' } }, 400)
   const provider = getProviderPreset(body.provider)
   const endpoint = buildEndpoint(body.baseUrl || '', provider.id, 'models')
   const upstreamFetch = env.UPSTREAM_FETCH || fetch
-  const upstream = await upstreamFetch(endpoint, {
-    redirect: 'error',
+  const upstream = await fetchWithoutRedirects(upstreamFetch, endpoint, {
     headers: {
       ...(provider.apiFormat === 'anthropic-messages'
         ? {
@@ -643,9 +655,8 @@ async function postUpstreamMedia(
   const upstreamFetch = runtimeFetch(env)
   const attachments = options.attachments || []
   const multipart = (providerId === 'openai' && kind === 'videos') || Boolean(options.attachmentField && attachments.length)
-  const upstream = await upstreamFetch(options.endpoint || buildEndpoint(baseUrl, providerId, kind), {
+  const upstream = await fetchWithoutRedirects(upstreamFetch, options.endpoint || buildEndpoint(baseUrl, providerId, kind), {
     method: 'POST',
-    redirect: 'error',
     headers: {
       authorization: `Bearer ${apiKey.trim()}`,
       accept: 'application/json, text/event-stream;q=0.9, */*;q=0.8',
@@ -664,9 +675,8 @@ async function postUpstreamMedia(
 
 async function getUpstreamVideoStatus(env: RuntimeEnv, baseUrl: string, apiKey: string, providerId: string | undefined, requestId: string): Promise<UpstreamMediaResult> {
   const upstreamFetch = runtimeFetch(env)
-  const upstream = await upstreamFetch(buildVideoStatusEndpoint(baseUrl, providerId, requestId), {
+  const upstream = await fetchWithoutRedirects(upstreamFetch, buildVideoStatusEndpoint(baseUrl, providerId, requestId), {
     method: 'GET',
-    redirect: 'error',
     headers: {
       authorization: `Bearer ${apiKey.trim()}`,
       accept: 'application/json, */*;q=0.8',
@@ -770,8 +780,7 @@ async function searchWeb(env: RuntimeEnv, query: string, userSearchApiKey = '') 
   const url = new URL(env.SEARCH_API_URL || 'https://s.jina.ai/')
   url.searchParams.set('q', query)
 
-  const response = await upstreamFetch(url.toString(), {
-    redirect: 'error',
+  const response = await fetchWithoutRedirects(upstreamFetch, url.toString(), {
     headers: authHeaders(token, 'application/json, text/plain;q=0.9, */*;q=0.5'),
   })
   const { text, truncated } = await readTextLimit(response, 24_000)
@@ -875,8 +884,7 @@ async function readPublicUrl(env: RuntimeEnv, url: string, userSearchApiKey = ''
     }
   }
   const readerUrl = new URL(`https://r.jina.ai/${parsed.toString()}`)
-  const readerResponse = await upstreamFetch(readerUrl.toString(), {
-    redirect: 'error',
+  const readerResponse = await fetchWithoutRedirects(upstreamFetch, readerUrl.toString(), {
     headers: authHeaders(token, 'text/plain, text/markdown, application/json;q=0.9, */*;q=0.5'),
   })
   const readerText = await readTextLimit(readerResponse, 24_000)
@@ -1269,9 +1277,8 @@ async function postChatJson(options: {
     const directMessages = options.messages
       .filter((message) => message.role !== 'system')
       .map((message) => ({ role: message.role, content: anthropicMessageContent(message) }))
-    upstream = await upstreamFetch(buildEndpoint(options.baseUrl, provider.id, 'chat'), {
+    upstream = await fetchWithoutRedirects(upstreamFetch, buildEndpoint(options.baseUrl, provider.id, 'chat'), {
       method: 'POST',
-      redirect: 'error',
       headers: {
         'x-api-key': options.apiKey.trim(),
         'anthropic-version': '2023-06-01',
@@ -1294,9 +1301,8 @@ async function postChatJson(options: {
       role: message.role,
       content: await openAiMessageContent(message),
     })))
-    upstream = await upstreamFetch(buildEndpoint(options.baseUrl, provider.id, 'chat'), {
+    upstream = await fetchWithoutRedirects(upstreamFetch, buildEndpoint(options.baseUrl, provider.id, 'chat'), {
       method: 'POST',
-      redirect: 'error',
       headers: {
         authorization: `Bearer ${options.apiKey.trim()}`,
         accept: 'application/json',
@@ -1552,8 +1558,7 @@ async function handleDiagnostics(request: Request, env: RuntimeEnv): Promise<Res
     checks.push({ label: 'Models endpoint', status: 'warn', message: `${provider.label} is configured for manual model entry here.` })
   } else {
     try {
-    const upstream = await runtimeFetch(env)(buildEndpoint(baseUrl, provider.id, 'models'), {
-      redirect: 'error',
+    const upstream = await fetchWithoutRedirects(runtimeFetch(env), buildEndpoint(baseUrl, provider.id, 'models'), {
       headers: {
         ...(provider.apiFormat === 'anthropic-messages'
           ? {
