@@ -1382,7 +1382,7 @@ function RunSettingsPanel({
           />
           <span>
             <strong>Default assistant instructions</strong>
-            <small>Turn off for endpoints that accept only user messages. Your own system prompt still applies.</small>
+            <small>Turn off for user-message-only endpoints. Your own instructions and web evidence safeguards still apply.</small>
           </span>
         </label>
         <label className="run-field system-control">
