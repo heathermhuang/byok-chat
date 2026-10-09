@@ -648,3 +648,51 @@ test('diagnostics probe model list and chat endpoint', async () => {
   assert.equal(body.checks.find((check) => check.label === 'Chat endpoint').status, 'ok')
   assert.equal(requests.find((request) => request.path === '/v1/chat/completions').body.max_tokens, 8)
 })
+
+test('a user-message-only endpoint can explicitly omit app instructions without dropping custom instructions', async () => {
+  for (const systemPrompt of ['', 'Follow this explicit instruction.']) {
+    let sent
+    const response = await worker.fetch(new Request('https://byok.chat/api/chat', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(chatRequestBody({ profile: {
+        provider: 'custom', baseUrl: 'https://gateway.example.com/v1',
+        defaultAssistantInstructions: false, systemPrompt,
+      } })),
+    }), {
+      ASSETS: { fetch: async () => new Response('asset') },
+      UPSTREAM_FETCH: async (input, init) => {
+        sent = await new Request(input, init).json()
+        return new Response(JSON.stringify({ choices: [{ message: { content: 'exact response' } }] }), {
+          headers: { 'content-type': 'application/json' },
+        })
+      },
+    })
+    assert.equal(response.status, 200)
+    assert.deepEqual(sent.messages, [
+      ...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []),
+      { role: 'user', content: 'Say hello' },
+    ])
+    assert.equal(sent.max_tokens, undefined)
+    assert.equal(sent.temperature, undefined)
+  }
+})
+
+test('profiles without the new opt-out retain the default assistant instructions', async () => {
+  let sent
+  const response = await worker.fetch(new Request('https://byok.chat/api/chat', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(chatRequestBody()),
+  }), {
+    ASSETS: { fetch: async () => new Response('asset') },
+    UPSTREAM_FETCH: async (input, init) => {
+      sent = await new Request(input, init).json()
+      return new Response(JSON.stringify({ choices: [{ message: { content: 'exact response' } }] }), {
+        headers: { 'content-type': 'application/json' },
+      })
+    },
+  })
+  assert.equal(response.status, 200)
+  assert.equal(sent.messages[0].role, 'system')
+  assert.match(sent.messages[0].content, /You are Byok Chat/)
+})

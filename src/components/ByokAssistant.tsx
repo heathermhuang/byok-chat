@@ -1374,6 +1374,17 @@ function RunSettingsPanel({
 
       <section className="run-settings-section">
         <h3>Instructions</h3>
+        <label className="toggle-row">
+          <input
+            type="checkbox"
+            checked={profile.defaultAssistantInstructions !== false}
+            onChange={(event) => onProfileChange({ defaultAssistantInstructions: event.target.checked })}
+          />
+          <span>
+            <strong>Default assistant instructions</strong>
+            <small>Turn off for endpoints that accept only user messages. Your own system prompt still applies.</small>
+          </span>
+        </label>
         <label className="run-field system-control">
           <span>System</span>
           <input value={profile.systemPrompt || ''} placeholder="Optional instruction" onChange={(event) => onProfileChange({ systemPrompt: event.target.value })} />

@@ -20,6 +20,7 @@ export type ByokProfile = {
   models: ByokModel[]
   lastFetchedAt?: string
   systemPrompt?: string
+  defaultAssistantInstructions?: boolean
   defaultTools?: ToolDefaults
   generationParams?: GenerationParams
   notes?: string

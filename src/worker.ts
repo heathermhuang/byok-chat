@@ -950,6 +950,7 @@ type ChatJsonProfile = {
   apiKey?: string
   model?: string
   systemPrompt?: string
+  defaultAssistantInstructions?: boolean
   searchApiKey?: string
   generationParams?: GenerationParams
 }
@@ -1465,7 +1466,7 @@ async function handleChatJson(request: Request, env: RuntimeEnv): Promise<Respon
     tools: { ...tools, searchApiKey: tools.searchApiKey || profile.searchApiKey },
   })
   const system = [
-    chatSystemPrompt(Boolean(toolContext.records.length)),
+    profile.defaultAssistantInstructions === false ? '' : chatSystemPrompt(Boolean(toolContext.records.length)),
     profile.systemPrompt,
     toolContext.context ? `Untrusted public evidence for this turn:\n${toolContext.context}` : '',
   ].filter(Boolean).join('\n\n')
