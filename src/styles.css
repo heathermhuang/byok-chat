@@ -2930,6 +2930,13 @@ textarea:focus {
   font-weight: var(--weight-semibold);
 }
 
+.markdown-image-consent {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .markdown-content {
   color: inherit;
   font-size: 0.93rem;

@@ -133,3 +133,36 @@ test('ships direct legal routes and production discovery files', () => {
   }
   assert.match(robots, /Sitemap: https:\/\/byok\.chat\/sitemap\.xml/)
 })
+
+test('withdrawal cancels an analytics continuation waiting for the tag load', async () => {
+  const calls = []
+  const listeners = new Map()
+  const script = { dataset: {}, addEventListener: (name, callback) => listeners.set(name, callback) }
+  const location = { hostname: 'byok.chat', origin: 'https://byok.chat', pathname: '/' }
+  const document = {
+    cookie: '', title: 'BYOK Chat',
+    getElementById: () => null,
+    createElement: () => script,
+    head: { appendChild: () => {} },
+  }
+  const originals = Object.fromEntries(['window', 'document', 'location'].map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)]))
+  try {
+    Object.defineProperty(globalThis, 'window', { configurable: true, value: { location, gtag: (...args) => calls.push(args) } })
+    Object.defineProperty(globalThis, 'document', { configurable: true, value: document })
+    Object.defineProperty(globalThis, 'location', { configurable: true, value: location })
+    const allowing = applyAnalyticsConsent(true)
+    assert.equal(typeof listeners.get('load'), 'function')
+    await applyAnalyticsConsent(false)
+    const afterWithdrawal = calls.length
+    listeners.get('load')()
+    await allowing
+    assert.deepEqual(calls.slice(afterWithdrawal), [], 'a superseded grant must not configure or emit analytics')
+    await applyAnalyticsConsent(true)
+    assert.equal(calls.filter((entry) => entry[0] === 'event' && entry[1] === 'page_view').length, 1, 'fresh consent still permits one page view')
+  } finally {
+    for (const [key, descriptor] of Object.entries(originals)) {
+      if (descriptor) Object.defineProperty(globalThis, key, descriptor)
+      else delete globalThis[key]
+    }
+  }
+})

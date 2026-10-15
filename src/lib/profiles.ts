@@ -86,6 +86,7 @@ function normalizeProfile(profile: ByokProfile): ByokProfile {
 
 function serializeProfile(profile: ByokProfile, options: SerializeProfileOptions = { includePlaintextApiKeys: true }): ByokProfile {
   const normalized = normalizeProfile(profile)
+  if (!options.includePlaintextApiKeys) normalized.searchApiKey = ''
   if (normalized.keyStorage === 'passphrase' && normalized.encryptedApiKey) {
     return { ...normalized, apiKey: '' }
   }

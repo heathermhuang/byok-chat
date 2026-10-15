@@ -44,12 +44,13 @@ The user-selected provider receives credentials and request content. Search and 
 - allowlisted provider paths for models, chat, image, and video operations;
 - credential-bearing redirects rejected;
 - explicit tool permissions and untrusted-source fencing;
-- attachment count and size limits;
+- bounded streaming JSON reads (1 MiB for API controls; 32 MiB for chat/media), at most 200 chat messages, and a 20 MiB attachment budget across each request;
 - per-client API and media-status rate limits;
 - sanitized provider errors and `no-store` API responses;
 - CSP, HSTS, clickjacking protection, referrer policy, permissions policy, and MIME-sniffing protection;
-- local encryption and redacted profile exports; and
-- consent-gated analytics that excludes query strings and workspace fields.
+- local encryption and redacted profile exports;
+- consent-gated analytics that excludes query strings and workspace fields and cancels pending initialization after withdrawal; and
+- explicit per-image approval before Markdown images contact an external host. Generated media retains its normal preview behavior.
 
 ## Deployment requirements
 

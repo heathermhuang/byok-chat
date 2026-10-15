@@ -25,6 +25,7 @@ const PRODUCTION_ANALYTICS_HOSTS = new Set(['byok.chat', 'www.byok.chat'])
 let analyticsConfigured = false
 let tagLoadPromise: Promise<void> | undefined
 let lastTrackedPage = ''
+let consentRevision = 0
 
 function isValidMeasurementId(value: string) {
   return /^G-[A-Z0-9]+$/i.test(value)
@@ -137,6 +138,7 @@ function loadGoogleTag() {
 export async function applyAnalyticsConsent(analyticsAllowed: boolean) {
   if (typeof window === 'undefined') return
   if (!analyticsIsConfigured()) return
+  const revision = ++consentRevision
 
   const gtag = ensureGtag()
   gtag('consent', 'default', consentState('denied'))
@@ -150,6 +152,7 @@ export async function applyAnalyticsConsent(analyticsAllowed: boolean) {
 
   gtag('consent', 'update', consentState('granted'))
   await loadGoogleTag()
+  if (revision !== consentRevision) return
   if (!analyticsConfigured) {
     const pageLocation = safePageLocation()
     gtag('js', new Date())

@@ -215,12 +215,32 @@ function convertByokMessage(message: ThreadMessage): ThreadMessageLike {
   }
 }
 
-function MarkdownTextPart({ text, status }: TextMessagePartProps) {
+export function MarkdownTextPart({ text, status }: TextMessagePartProps) {
   return (
     <div className="markdown-content">
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ img: MarkdownImage }}>{text}</ReactMarkdown>
       {status.type === 'running' ? <span className="loading-inline">Working...</span> : null}
     </div>
+  )
+}
+
+function MarkdownImage({ src, alt }: { src?: string; alt?: string }) {
+  const [approvedUrl, setApprovedUrl] = useState('')
+  let url: URL
+  try {
+    url = new URL(src || '', globalThis.location?.origin || 'https://byok.chat')
+  } catch {
+    return <span>{alt || 'Image unavailable'}</span>
+  }
+  if (!src || !['http:', 'https:'].includes(url.protocol) || url.username || url.password) {
+    return <span>{alt || 'Image unavailable'}</span>
+  }
+  if (approvedUrl === src) return <img src={src} alt={alt || 'External image'} referrerPolicy="no-referrer" />
+  return (
+    <span className="markdown-image-consent">
+      <span>{alt || 'External image'} — loading contacts {url.hostname}.</span>
+      <button className="button secondary" type="button" onClick={() => setApprovedUrl(src)}>Load external image</button>
+    </span>
   )
 }
 

@@ -175,9 +175,46 @@ function buildImageEditEndpoint(baseUrl: string, providerId: string | undefined)
   return `${buildApiBaseUrl(baseUrl, provider.id)}/${editPath}`
 }
 
-async function readBody<T>(request: Request): Promise<T> {
+const MAX_API_BODY_BYTES = 1024 * 1024
+const MAX_ATTACHMENT_BODY_BYTES = 32 * 1024 * 1024
+
+class RequestTooLargeError extends Error {}
+
+function requestError(error: unknown, fallback: string): Response {
+  const tooLarge = error instanceof RequestTooLargeError
+  return json({ error: {
+    ...(tooLarge ? { code: 'request_too_large' } : {}),
+    message: error instanceof Error ? scrubSensitiveText(error.message) : fallback,
+  } }, tooLarge ? 413 : 400)
+}
+
+async function readBody<T>(request: Request, limit = MAX_API_BODY_BYTES): Promise<T> {
+  if (Number(request.headers.get('content-length')) > limit) {
+    await request.body?.cancel().catch(() => undefined)
+    throw new RequestTooLargeError('Request body exceeds the allowed size.')
+  }
+  if (!request.body) throw new Error('Invalid JSON request body')
+  const reader = request.body.getReader()
+  const decoder = new TextDecoder()
+  let bytes = 0
+  let text = ''
   try {
-    return await request.json() as T
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      bytes += value.byteLength
+      if (bytes > limit) {
+        await reader.cancel().catch(() => undefined)
+        throw new RequestTooLargeError('Request body exceeds the allowed size.')
+      }
+      text += decoder.decode(value, { stream: true })
+    }
+    text += decoder.decode()
+  } finally {
+    reader.releaseLock()
+  }
+  try {
+    return JSON.parse(text) as T
   } catch {
     throw new Error('Invalid JSON request body')
   }
@@ -1100,10 +1137,17 @@ function diagnosticForStatus(status: number, message: string): string {
 }
 
 function normalizeChatJsonMessages(messages: ChatJsonMessage[] | undefined): DirectChatMessage[] {
+  if (messages !== undefined && !Array.isArray(messages)) throw new Error('messages must be an array')
+  if ((messages?.length || 0) > 200) throw new RequestTooLargeError('Send no more than 200 messages per request.')
+  let attachmentBytes = 0
   return (messages || []).map((message) => {
     const role = message.role === 'assistant' || message.role === 'system' ? message.role : 'user'
     const content = stringValue(message.content)
     const attachments = role === 'user' ? normalizeInputAttachments(message.attachments) : []
+    attachmentBytes += attachments.reduce((total, attachment) => total + attachment.size, 0)
+    if (attachmentBytes > MAX_INPUT_ATTACHMENTS_TOTAL_BYTES) {
+      throw new RequestTooLargeError('Attachments exceed the 20 MB per-request limit.')
+    }
     return content || attachments.length ? { role, content, ...(attachments.length ? { attachments } : {}) } : undefined
   }).filter((message): message is DirectChatMessage => Boolean(message))
 }
@@ -1449,7 +1493,7 @@ async function handleChatJson(request: Request, env: RuntimeEnv): Promise<Respon
     profile?: ChatJsonProfile
     messages?: ChatJsonMessage[]
     tools?: ChatJsonTools
-  }>(request)
+  }>(request, MAX_ATTACHMENT_BODY_BYTES)
   const profile = body.profile || {}
   const provider = getProviderPreset(profile.provider)
   const baseUrl = profile.baseUrl || ''
@@ -1509,7 +1553,7 @@ async function handleMedia(request: Request, env: RuntimeEnv): Promise<Response>
     provider?: string
     generationParams?: GenerationParams
     attachments?: unknown[]
-  }>(request)
+  }>(request, MAX_ATTACHMENT_BODY_BYTES)
   const baseUrl = body.baseUrl || ''
   const apiKey = body.apiKey || ''
   const model = stringValue(body.model)
@@ -1737,56 +1781,56 @@ export default {
       try {
         return await handleModels(request, env)
       } catch (error) {
-        return json({ error: { message: error instanceof Error ? error.message : 'Failed to fetch models' } }, 400)
+        return requestError(error, 'Failed to fetch models')
       }
     }
     if (url.pathname === '/api/chat' && request.method === 'POST') {
       try {
         return await handleChatJson(request, env)
       } catch (error) {
-        return json({ error: { message: error instanceof Error ? scrubSensitiveText(error.message) : 'Chat request failed' } }, 400)
+        return requestError(error, 'Chat request failed')
       }
     }
     if (url.pathname === '/api/chat-json' && request.method === 'POST') {
       try {
         return await handleChatJson(request, env)
       } catch (error) {
-        return json({ error: { message: error instanceof Error ? scrubSensitiveText(error.message) : 'Chat request failed' } }, 400)
+        return requestError(error, 'Chat request failed')
       }
     }
     if (url.pathname === '/api/media' && request.method === 'POST') {
       try {
         return await handleMedia(request, env)
       } catch (error) {
-        return json({ error: { message: error instanceof Error ? scrubSensitiveText(error.message) : 'Media request failed' } }, 400)
+        return requestError(error, 'Media request failed')
       }
     }
     if (url.pathname === '/api/media/status' && request.method === 'POST') {
       try {
         return await handleMediaStatus(request, env)
       } catch (error) {
-        return json({ error: { message: error instanceof Error ? scrubSensitiveText(error.message) : 'Video status check failed' } }, 400)
+        return requestError(error, 'Video status check failed')
       }
     }
     if (url.pathname === '/api/diagnostics' && request.method === 'POST') {
       try {
         return await handleDiagnostics(request, env)
       } catch (error) {
-        return json({ error: { message: error instanceof Error ? scrubSensitiveText(error.message) : 'Diagnostics failed' } }, 400)
+        return requestError(error, 'Diagnostics failed')
       }
     }
     if (url.pathname === '/api/tools/search' && request.method === 'POST') {
       try {
         return await handleToolSearch(request, env)
       } catch (error) {
-        return json({ error: { message: error instanceof Error ? scrubSensitiveText(error.message) : 'Tool search failed' } }, 400)
+        return requestError(error, 'Tool search failed')
       }
     }
     if (url.pathname === '/api/tools/read-url' && request.method === 'POST') {
       try {
         return await handleToolReadUrl(request, env)
       } catch (error) {
-        return json({ error: { message: error instanceof Error ? scrubSensitiveText(error.message) : 'URL read failed' } }, 400)
+        return requestError(error, 'URL read failed')
       }
     }
     if (url.pathname.startsWith('/api/')) {
