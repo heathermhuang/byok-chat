@@ -189,3 +189,26 @@ test('profiles persist normalized text and media generation controls', () => {
     },
   })
 })
+
+for (const keyStorage of ['browser', 'passphrase']) {
+  test(`safe profile export removes search credentials with ${keyStorage} provider storage`, () => {
+    const profile = {
+      ...encryptedProfile(),
+      keyStorage,
+      encryptedApiKey: keyStorage === 'passphrase' ? encryptedApiKey : undefined,
+      apiKey: 'synthetic-provider-export-secret',
+      searchApiKey: 'synthetic-search-export-secret',
+      notes: 'Keep nonsecret profile settings',
+    }
+    const snapshot = exportProfilesSnapshot([profile], profile.id)
+    const exported = JSON.parse(snapshot).profiles[0]
+    assert.doesNotMatch(snapshot, /synthetic-(?:provider|search)-export-secret/)
+    assert.equal(exported.apiKey, '')
+    assert.ok(!exported.searchApiKey)
+    assert.equal(exported.notes, profile.notes)
+    if (keyStorage === 'passphrase') assert.deepEqual(exported.encryptedApiKey, encryptedApiKey)
+    globalThis.localStorage = new MemoryStorage()
+    saveProfiles([profile], profile.id)
+    assert.equal(loadProfiles().profiles[0].searchApiKey, profile.searchApiKey)
+  })
+}
