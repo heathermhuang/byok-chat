@@ -1,3 +1,4 @@
+import { handleAgentDiscovery, withDiscoveryHeaders } from './agent-discovery.ts'
 import {
   buildAnthropicMessageOptions,
   buildImageGenerationOptions,
@@ -1774,6 +1775,8 @@ async function handleToolReadUrl(request: Request, env: RuntimeEnv): Promise<Res
 export default {
   async fetch(request: Request, env: RuntimeEnv): Promise<Response> {
     const url = new URL(request.url)
+    const discovery = await handleAgentDiscovery(request)
+    if (discovery) return withSecurityHeaders(withDiscoveryHeaders(discovery, request))
     const rateLimited = await enforceApiRateLimit(request, env)
     if (rateLimited) return rateLimited
 
@@ -1833,9 +1836,9 @@ export default {
         return requestError(error, 'URL read failed')
       }
     }
-    if (url.pathname.startsWith('/api/')) {
+    if (url.pathname === '/api' || url.pathname.startsWith('/api/')) {
       return json({ error: { message: 'Not found' } }, 404)
     }
-    return withSecurityHeaders(await env.ASSETS.fetch(request))
+    return withSecurityHeaders(withDiscoveryHeaders(await env.ASSETS.fetch(request), request))
   },
 } satisfies ExportedHandler<Env>
