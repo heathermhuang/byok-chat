@@ -57,6 +57,28 @@ async function fetchText(fetchImpl, url) {
   return text
 }
 
+function comparisonBody(body, assetUrl) {
+  const url = new URL(assetUrl)
+  if (!['/openapi.json', '/.well-known/ai-catalog.json'].includes(url.pathname)) return body
+
+  const normalize = (value) => {
+    if (typeof value === 'string') {
+      if (value === url.origin || value.startsWith(`${url.origin}/`)) {
+        return `<deployment-origin>${value.slice(url.origin.length)}`
+      }
+      const urnPrefix = `urn:air:${url.hostname}:`
+      if (value.startsWith(urnPrefix)) return `urn:air:<deployment-host>:${value.slice(urnPrefix.length)}`
+      return value
+    }
+    if (Array.isArray(value)) return value.map(normalize)
+    if (value && typeof value === 'object') {
+      return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, normalize(item)]))
+    }
+    return value
+  }
+  return JSON.stringify(normalize(JSON.parse(body)))
+}
+
 async function readDeployment(fetchImpl, label, inputUrl) {
   const pageUrl = normalizePageUrl(inputUrl)
   const html = await fetchText(fetchImpl, pageUrl.toString())
@@ -77,6 +99,7 @@ async function readDeployment(fetchImpl, label, inputUrl) {
       path: new URL(assetUrl).pathname,
       bytes: Buffer.byteLength(body),
       sha256: sha256(body),
+      comparisonSha256: sha256(comparisonBody(body, assetUrl)),
     })
 
     for (const childAssetUrl of collectAssetReferences(body, new URL(assetUrl))) {
@@ -114,7 +137,8 @@ export function compareDeploymentReports(staging, production) {
       productionHash: right?.sha256 || '',
       stagingBytes: left?.bytes || 0,
       productionBytes: right?.bytes || 0,
-      status: !left ? 'production-only' : !right ? 'staging-only' : left.sha256 === right.sha256 ? 'match' : 'diff',
+      originNormalized: Boolean(left && right && left.sha256 !== right.sha256 && left.comparisonSha256 && left.comparisonSha256 === right.comparisonSha256),
+      status: !left ? 'production-only' : !right ? 'staging-only' : (left.comparisonSha256 || left.sha256) === (right.comparisonSha256 || right.sha256) ? 'match' : 'diff',
     }
   })
   const htmlMatches = staging.html.sha256 === production.html.sha256
@@ -151,6 +175,8 @@ function printReport(report) {
   console.log(`staging:    ${staging.url} html ${staging.html.sha256.slice(0, 12)} assets ${staging.assets.length}`)
   console.log(`production: ${production.url} html ${production.html.sha256.slice(0, 12)} assets ${production.assets.length}`)
   console.log(`status: ${comparison.matches ? 'MATCH' : 'DIFF'}`)
+  const originNormalized = comparison.rows.filter((row) => row.originNormalized)
+  if (originNormalized.length) console.log(`discovery: ${originNormalized.length} document(s) match after deployment-origin normalization; raw hashes retained`)
 
   if (!comparison.htmlMatches) {
     console.log('html: diff')
