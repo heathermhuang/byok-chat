@@ -37,6 +37,31 @@ Read [the security model](docs/SECURITY_MODEL.md) before self-hosting or changin
 
 Provider requests are limited to the model, chat, image, and video paths implemented in `src/worker.ts`. Credential-bearing redirects are rejected. Custom endpoints must use HTTPS and public hosts.
 
+## Agent access
+
+The homepage supports `Accept: text/markdown` and links to `/agent-guide.md`,
+`/auth.md`, `/openapi.json`, and `/.well-known/api-catalog`. A skill index at
+`/.well-known/agent-skills/index.json` publishes a SHA-256 digest of the exact
+served skill. `/.well-known/ai-catalog.json` describes the existing HTTP API.
+Discovery documents use the request origin so staging and self-hosted installations
+link to their own endpoints.
+
+Supporting browsers register `get_byok_guide` and `list_byok_providers` through
+WebMCP. These read-only tools return public documentation and provider presets;
+they do not read saved credentials, profiles or conversations, send requests to
+providers, or change settings. Browser support is optional.
+
+The Worker serves robots and sitemap responses, allows search and AI input on
+public content, declares `ai-train=no`, and excludes operational `/api/` routes
+from crawling. Unsupported well-known protocols return JSON 404 responses.
+OAuth, remote MCP, A2A, Poppy, DNS-AID and commerce protocols are not advertised.
+Keep discovery routes in `assets.run_worker_first` when self-hosting; otherwise
+the SPA fallback can serve HTML for missing metadata.
+
+Run `BYOK_CHAT_BASE_URL=https://staging.byok.chat npm run test:agents` after a
+deployment to check Markdown negotiation, discovery links, skill digests, methods
+and missing-protocol responses without provider credentials or billable calls.
+
 ## Local development
 
 BYOK Chat supports Node.js `22.22.2+` on the Node 22 line, `24.15.0+` on the

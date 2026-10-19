@@ -18,6 +18,7 @@
     "start": "npm run dev",
     "test": "node --import tsx --test test/*.test.mjs",
     "test:browser": "node scripts/browser-smoke.mjs",
+    "test:agents": "node scripts/agent-readiness-smoke.mjs",
     "verify:official-env": "node --env-file=.env.official scripts/check-public-env.mjs",
     "verify:public-env": "node scripts/check-public-env.mjs"
   },

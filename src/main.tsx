@@ -4,6 +4,9 @@ import { App } from './App'
 import { LegalPage, legalPageKind } from './components/LegalPage'
 import { PrivacyControls } from './components/PrivacyControls'
 import './styles.css'
+import { registerPublicAgentTools } from './lib/webmcp'
+
+void registerPublicAgentTools().catch(() => undefined)
 
 function Root() {
   const legalKind = legalPageKind(globalThis.location?.pathname || '/')
