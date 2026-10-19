@@ -66,3 +66,34 @@ test('compares staging and production asset hashes', async () => {
   assert.equal(report.comparison.rows.find((row) => row.path === '/assets/workspace-staging.js')?.status, 'staging-only')
   assert.equal(report.comparison.rows.find((row) => row.path === '/assets/workspace-production.js')?.status, 'production-only')
 })
+
+function discoveryFetch({ changedSchema = false, changedScript = false } = {}) {
+  return async (input) => {
+    const url = new URL(input)
+    const production = url.hostname === 'production.example'
+    const body = url.pathname === '/'
+      ? '<link rel="ai-catalog" href="/.well-known/ai-catalog.json"><link rel="service-desc" href="/openapi.json"><script src="/assets/app.js"></script>'
+      : url.pathname === '/openapi.json'
+        ? JSON.stringify({ openapi: '3.1.0', servers: [{ url: url.origin }], paths: { '/api/chat': { summary: production && changedSchema ? 'Changed API' : 'Chat' } } })
+        : url.pathname === '/.well-known/ai-catalog.json'
+          ? JSON.stringify({ host: { identifier: url.origin }, entries: [{ identifier: `urn:air:${url.hostname}:api:chat`, url: `${url.origin}/openapi.json` }] })
+          : production && changedScript ? 'const endpoint="https://production.example"' : 'const endpoint="https://staging.example"'
+    return new Response(body, { status: 200 })
+  }
+}
+
+test('compares origin-specific discovery documents while preserving raw receipts', async () => {
+  const report = await compareDeployAssets({ stagingUrl: 'https://staging.example/', productionUrl: 'https://production.example/', fetchImpl: discoveryFetch() })
+  assert.equal(report.comparison.matches, true)
+  const rows = report.comparison.rows.filter((row) => row.originNormalized)
+  assert.deepEqual(rows.map((row) => row.path), ['/.well-known/ai-catalog.json', '/openapi.json'])
+  assert.ok(rows.every((row) => row.stagingHash !== row.productionHash))
+})
+
+test('still rejects changed discovery schemas and changed static asset bytes', async () => {
+  const report = await compareDeployAssets({ stagingUrl: 'https://staging.example/', productionUrl: 'https://production.example/', fetchImpl: discoveryFetch({ changedSchema: true, changedScript: true }) })
+  assert.equal(report.comparison.matches, false)
+  assert.equal(report.comparison.rows.find((row) => row.path === '/openapi.json')?.status, 'diff')
+  assert.equal(report.comparison.rows.find((row) => row.path === '/assets/app.js')?.status, 'diff')
+  assert.equal(report.comparison.rows.find((row) => row.path === '/.well-known/ai-catalog.json')?.status, 'match')
+})

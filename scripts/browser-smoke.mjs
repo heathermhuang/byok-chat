@@ -803,7 +803,9 @@ try {
 
     await moreButton.click()
     await mobileReadyPage.setViewportSize({ width: 900, height: 844 })
-    await mobileActionsDialog.waitFor({ state: 'detached', timeout: 10_000 })
+    // Role locators exclude CSS-hidden dialogs before the resize event clears
+    // React state. Wait for actual removal, not disappearance from the AX tree.
+    await mobileReadyPage.locator('.mobile-actions-sheet').waitFor({ state: 'detached', timeout: 10_000 })
     assert.equal(await mobileReadyPage.locator('.mobile-more-trigger').getAttribute('aria-expanded'), 'false')
     await mobileReadyPage.setViewportSize({ width: 390, height: 844 })
 

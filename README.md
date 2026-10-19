@@ -123,6 +123,9 @@ BYOK_CHAT_BASE_URL=https://staging.byok.chat/ npm run test:browser
 ```
 
 Production requires explicit approval and the gates in [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md). `npm run release:assets` compares the staging and production HTML and asset hashes.
+Static assets must match byte for byte. The generated OpenAPI and ARD catalogs
+are compared after normalizing their own deployment-origin URLs and host URNs;
+the report retains their raw hashes and explicitly identifies normalized matches.
 
 ## Privacy and analytics
 
