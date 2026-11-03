@@ -4,7 +4,7 @@
 
 BYOK Chat is a standalone private AI workspace for people who bring their own provider keys. BYOK always expands to **Bring Your Own Key** at the first product touch. The product does not sell or resell model access; it connects provider accounts, access, and billing the user already controls.
 
-The user should remember: **my provider, my account, my key**. This is serious chat software with a clear trust model, not a Sub2API admin screen, a generic LLM tester, or a marketing landing page.
+The user should remember: **my provider, my account, my key**. The primary first-run journey is test a provider key, select a model, then chat with that model. Model discovery and chat access are separate checks. A successful chat probe earns an explicit model-specific chat action; changing the credential, endpoint or model invalidates that result.
 
 Trust claims must distinguish storage from transit:
 
@@ -88,7 +88,7 @@ Desktop:
 - Header/status chrome stays under 72px.
 - Chat owns the center after setup.
 - Endpoint editing is one click away in a temporary drawer, but never a persistent ready-state rail.
-- Setup uses a split launchpad: left progress/story panel, right provider/config panel.
+- Setup uses a split key-testing workspace: endpoint and model settings at left, live diagnostic checks and an explicit Chat with [model] action at right. Preserve the existing warm neutral and green tokens.
 
 Mobile:
 

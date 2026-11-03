@@ -2,6 +2,8 @@
 
 BYOK means **Bring Your Own Key**. BYOK Chat lets you use keys from AI provider accounts you control in one private workspace. It does not sell or resell model access, and it does not add a model subscription between you and your provider.
 
+Start by fetching models and testing a key with a small chat probe. When the probe passes, choose **Chat with [model]** to send messages with that same model. Test results stay in session memory and are invalidated when the profile, provider, endpoint, key, or selected model changes. A model list alone does not establish chat access. The real provider may charge for the 8-token probe.
+
 The workspace supports official providers, OpenRouter, custom OpenAI-compatible endpoints, persistent local threads, comparison, usage visibility, permissioned web tools, and in-thread media generation.
 
 The hosted product is available at [byok.chat](https://byok.chat).

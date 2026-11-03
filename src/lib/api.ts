@@ -126,9 +126,10 @@ export async function sendChat(profile: ByokProfile, messages: ThreadMessage[], 
   }
 }
 
-export async function diagnoseProvider(profile: ByokProfile): Promise<DiagnosticsResult> {
+export async function diagnoseProvider(profile: ByokProfile, signal?: AbortSignal): Promise<DiagnosticsResult> {
   const response = await fetch('/api/diagnostics', {
     method: 'POST',
+    signal,
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
       provider: profile.provider,
