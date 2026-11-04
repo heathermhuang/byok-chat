@@ -175,9 +175,10 @@ export async function generateMedia(profile: ByokProfile, mode: MediaMode, promp
   }
 }
 
-export async function checkMediaJob(profile: ByokProfile, job: PendingMediaJob): Promise<MediaGenerationResult> {
+export async function checkMediaJob(profile: ByokProfile, job: PendingMediaJob, signal?: AbortSignal): Promise<MediaGenerationResult> {
   const response = await fetch('/api/media/status', {
     method: 'POST',
+    signal,
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
       baseUrl: profile.baseUrl,
