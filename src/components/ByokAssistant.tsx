@@ -363,7 +363,7 @@ function ByokAuiMessage({
   const hasPendingVideoJob = role === 'assistant' && Boolean(custom.actionContext?.mediaJob?.requestId && !custom.attachments?.length)
 
   return (
-    <MessagePrimitive.Root className={`message message-${role === 'user' ? 'user' : 'assistant'} ${custom.status === 'error' ? 'message-error-state' : ''}`}>
+    <MessagePrimitive.Root className={`message message-${role === 'user' ? 'user' : 'assistant'} ${custom.status === 'error' && !hasPendingVideoJob ? 'message-error-state' : ''}`}>
       <div className="message-avatar" aria-hidden="true">
         {role === 'user' ? <span className="user-dot">U</span> : <span className="assistant-dot">AI</span>}
       </div>
@@ -374,7 +374,7 @@ function ByokAuiMessage({
         </div>
         <MessagePrimitive.Parts components={messagePartComponents} />
         {custom.metadata ? <RunMetaBar metadata={custom.metadata} compact /> : null}
-        {custom.status === 'error' ? (
+        {custom.status === 'error' && !hasPendingVideoJob ? (
           <ErrorPrimitive.Root className="message-error">
             <strong>Request failed</strong>
             <p>Try again, switch models, or review the endpoint connection.</p>

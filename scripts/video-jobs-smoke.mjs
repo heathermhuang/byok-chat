@@ -26,7 +26,7 @@ async function fresh(width, savedJob) {
     if (localStorage.getItem('byok.chat.profiles.v1')) return
     const now = new Date().toISOString()
     const profile = { id: 'fixture-profile', name: 'Video fixture', provider: 'custom', baseUrl: 'https://example.com/v1', apiKey: 'fixture-key', selectedModel: job.model, models: [{ id: job.model, name: job.model, raw: { architecture: { output_modalities: ['video'] } } }] }
-    const messages = savedJob ? [{ id: 'saved-message', role: 'assistant', text: 'Old saved running message', createdAt: now, actionContext: { mediaJob: job, mode: job.mode } }] : []
+    const messages = savedJob ? [{ id: 'saved-message', role: 'assistant', text: 'Old saved status error', status: 'error', createdAt: now, actionContext: { mediaJob: job, mode: job.mode } }] : []
     localStorage.setItem('byok.chat.consent.v1', JSON.stringify({ version: 1, essential: true, analytics: false, updatedAt: now }))
     localStorage.setItem('byok.chat.profiles.v1', JSON.stringify([profile]))
     localStorage.setItem('byok.chat.activeProfile.v1', profile.id)
@@ -40,14 +40,20 @@ try {
   for (const width of [1440, 390]) {
     const { context, page, errors } = await fresh(width, true)
     let checks = 0, generations = 0
+    let releaseFirst
+    const firstCheck = new Promise(resolve => { releaseFirst = resolve })
     await page.route('**/api/media', route => { generations++; return route.fulfill({ json: pending }) })
-    await page.route('**/api/media/status', route => {
+    await page.route('**/api/media/status', async route => {
       assert.equal(route.request().postDataJSON().requestId, job.requestId)
       checks++
+      if (checks === 1) await firstCheck
       return route.fulfill({ json: checks >= 13 ? ready : { ...pending, pendingJob: { ...job, status: `running-${checks}` } } })
     })
     await page.clock.install()
-    await page.goto(base, { waitUntil: 'networkidle' })
+    await page.goto(base, { waitUntil: 'domcontentloaded' })
+    await page.getByTitle('Check video status').waitFor()
+    assert.equal(await page.getByRole('button', { name: 'Retry', exact: true }).count(), 0)
+    releaseFirst()
     await page.getByText(/running-1\)/).waitFor()
     assert.equal(await page.getByTitle('Retry', { exact: true }).count(), 0)
     // Cross the former ten-poll cutoff without spending minutes in the test.
