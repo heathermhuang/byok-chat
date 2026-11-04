@@ -53,6 +53,8 @@ try {
     await page.goto(base, { waitUntil: 'domcontentloaded' })
     await page.getByTitle('Check video status').waitFor()
     assert.equal(await page.getByRole('button', { name: 'Retry', exact: true }).count(), 0)
+    assert(await page.getByTitle('Check video status').evaluate(button => button.scrollWidth <= button.clientWidth), 'status label must fit its button')
+    await page.screenshot({ path: `${out}/pending-${width}.png` })
     releaseFirst()
     await page.getByText(/running-1\)/).waitFor()
     assert.equal(await page.getByTitle('Retry', { exact: true }).count(), 0)

@@ -405,7 +405,7 @@ function ByokAuiMessage({
                 </>
               ) : null}
               {hasPendingVideoJob ? (
-                <button type="button" title="Check video status" disabled={isRunning} onClick={() => onCheckMediaJob(messageId)}>
+                <button className="button secondary" style={{ width: 'auto' }} type="button" title="Check video status" disabled={isRunning} onClick={() => onCheckMediaJob(messageId)}>
                   <RefreshCw size={14} /> Check status
                 </button>
               ) : null}
