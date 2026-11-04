@@ -62,7 +62,10 @@ import {
   VERBOSITY_OPTIONS,
   VIDEO_SECOND_OPTIONS,
   VIDEO_SIZE_OPTIONS,
+  SEEDANCE_RESOLUTION_OPTIONS,
+  SEEDANCE_RATIO_OPTIONS,
 } from '../lib/generation-options'
+import { isSeedanceModelId } from '../lib/seedance'
 import { checkMediaJob, diagnoseProvider, generateMedia, sendChat, type ChatToolSettings, type DiagnosticsResult, type GeneratedMediaAttachment, type MediaMode } from '../lib/api'
 import { createVideoJobMonitor, pendingVideoText } from '../lib/video-jobs'
 import { capabilityLabel, getEffectiveModelCapabilities, getUnsupportedModelReason } from '../lib/model-utils'
@@ -563,7 +566,6 @@ export function ByokAssistant({
   }
 
   useEffect(() => {
-    setSending(false)
     if (thread.profileId !== profile.id || !profile.apiKey.trim()) return
     const monitor = createVideoJobMonitor({
       check: (job, signal) => checkMediaJob(profile, job, signal),
@@ -1304,6 +1306,7 @@ function RunSettingsPanel({
   const generationParams = profile.generationParams || {}
   const imageParams = generationParams.image || {}
   const videoParams = generationParams.video || {}
+  const seedanceVideo = isSeedanceModelId(profile.selectedModel)
   const modelHint = modelHintForProfile(profile)
 
   function optionalNumber(value: string): number | undefined {
@@ -1446,6 +1449,30 @@ function RunSettingsPanel({
         <section className="run-settings-section">
           <h3>Video</h3>
           <div className="run-control-group">
+            {seedanceVideo ? <>
+              <label className="run-field">
+                <span>Seconds</span>
+                <input type="number" min="4" max="30" step="1" value={videoParams.duration ?? 5} onChange={(event) => updateVideoParams({ duration: optionalNumber(event.target.value) })} />
+              </label>
+              <label className="run-field">
+                <span>Resolution</span>
+                <select value={videoParams.resolution || '720p'} onChange={(event) => updateVideoParams({ resolution: event.target.value as NonNullable<typeof videoParams.resolution> })}>
+                  {SEEDANCE_RESOLUTION_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+                </select>
+              </label>
+              <label className="run-field">
+                <span>Aspect ratio</span>
+                <select value={videoParams.aspectRatio || '16:9'} onChange={(event) => updateVideoParams({ aspectRatio: event.target.value as NonNullable<typeof videoParams.aspectRatio> })}>
+                  {SEEDANCE_RATIO_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+                </select>
+              </label>
+              <label className="run-field">
+                <span>Audio</span>
+                <select value={videoParams.generateAudio ? 'on' : 'off'} onChange={(event) => updateVideoParams({ generateAudio: event.target.value === 'on' })}>
+                  <option value="off">Off</option><option value="on">On</option>
+                </select>
+              </label>
+            </> : <>
             <label className="run-field">
               <span>Size</span>
               <select value={videoParams.size || ''} onChange={(event) => updateVideoParams({ size: event.target.value as NonNullable<NonNullable<ByokProfile['generationParams']>['video']>['size'] || undefined })}>
@@ -1460,6 +1487,7 @@ function RunSettingsPanel({
                 {VIDEO_SECOND_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
               </select>
             </label>
+            </>}
           </div>
         </section>
       ) : null}

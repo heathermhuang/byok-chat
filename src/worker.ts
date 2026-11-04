@@ -1,4 +1,5 @@
 import { handleAgentDiscovery, withDiscoveryHeaders } from './agent-discovery.ts'
+import { buildSeedancePayload, isSeedanceModelId } from './lib/seedance.ts'
 import {
   buildAnthropicMessageOptions,
   buildImageGenerationOptions,
@@ -158,7 +159,17 @@ function buildEndpoint(baseUrl: string, providerId: string | undefined, kind: Pr
   return `${buildApiBaseUrl(baseUrl, providerId)}/${providerEndpointPath(providerId, kind)}`
 }
 
-function buildVideoStatusEndpoint(baseUrl: string, providerId: string | undefined, requestId: string): string {
+function buildSeedanceEndpoint(baseUrl: string, providerId: string | undefined): string {
+  if (getProviderPreset(providerId).id !== 'custom') throw new Error('Use a Custom ModelArk-compatible endpoint for Seedance 2.5.')
+  const url = new URL(normalizeBaseUrl(baseUrl))
+  if (url.search || url.hash) throw new Error('The Seedance base URL must not contain a query or fragment.')
+  const prefix = url.pathname.replace(/\/+$/, '').replace(/\/(?:v1|api\/v3)$/i, '')
+  url.pathname = `${prefix}/api/v3/contents/generations/tasks`
+  return url.toString()
+}
+
+function buildVideoStatusEndpoint(baseUrl: string, providerId: string | undefined, requestId: string, model: string): string {
+  if (isSeedanceModelId(model)) return `${buildSeedanceEndpoint(baseUrl, providerId)}/${encodeURIComponent(requestId)}`
   const provider = getProviderPreset(providerId)
   const videosPath = cleanEndpointPath(provider.paths.videos || 'videos')
   const statusBase = videosPath.endsWith('/generations')
@@ -449,6 +460,9 @@ function videoSizeToGrokResolution(size: string | undefined): string | undefined
 }
 
 function buildMediaPayload(mode: MediaMode, model: string, prompt: string, providerId: string | undefined, params: GenerationParams | undefined, attachments: InputAttachment[] = []) {
+  if (mode === 'video_generation' && isSeedanceModelId(model)) {
+    return { payload: buildSeedancePayload(model, prompt, params, attachments.map((item) => item.dataUrl)), upstreamModel: model }
+  }
   const usesGrok = mediaProviderUsesGrok(providerId, model)
   const upstreamModel = usesGrok ? normalizeGrokPromptMediaModel(mode, model) : model
   const inputImage = attachments.find((attachment) => attachment.mediaType.startsWith('image/'))
@@ -542,7 +556,7 @@ function extractVideoStatus(text: string): string {
 }
 
 function isTerminalVideoFailure(status: string): boolean {
-  return ['failed', 'error', 'cancelled', 'canceled', 'rejected'].includes(status)
+  return ['failed', 'error', 'cancelled', 'canceled', 'rejected', 'expired'].includes(status)
 }
 
 function isTerminalVideoSuccess(status: string): boolean {
@@ -711,9 +725,9 @@ async function postUpstreamMedia(
   return { upstream, text, truncated }
 }
 
-async function getUpstreamVideoStatus(env: RuntimeEnv, baseUrl: string, apiKey: string, providerId: string | undefined, requestId: string): Promise<UpstreamMediaResult> {
+async function getUpstreamVideoStatus(env: RuntimeEnv, baseUrl: string, apiKey: string, providerId: string | undefined, requestId: string, model: string): Promise<UpstreamMediaResult> {
   const upstreamFetch = runtimeFetch(env)
-  const upstream = await fetchWithoutRedirects(upstreamFetch, buildVideoStatusEndpoint(baseUrl, providerId, requestId), {
+  const upstream = await fetchWithoutRedirects(upstreamFetch, buildVideoStatusEndpoint(baseUrl, providerId, requestId, model), {
     method: 'GET',
     headers: {
       authorization: `Bearer ${apiKey.trim()}`,
@@ -732,11 +746,11 @@ async function pollVideoResult(env: RuntimeEnv, baseUrl: string, apiKey: string,
     .split(',')
     .map((value) => Number(value.trim()))
     .filter((value) => Number.isFinite(value) && value >= 0)
-  const delays = configuredDelays.length ? configuredDelays : [0, 1_000, 2_000, 4_000, 8_000, 12_000]
+  const delays = isSeedanceModelId(model) ? [0] : configuredDelays.length ? configuredDelays : [0, 1_000, 2_000, 4_000, 8_000, 12_000]
   let latest: NormalizedMediaResult | undefined
   for (const delay of delays) {
     if (delay > 0) await sleep(delay)
-    const statusResult = await getUpstreamVideoStatus(env, baseUrl, apiKey, providerId, requestId)
+    const statusResult = await getUpstreamVideoStatus(env, baseUrl, apiKey, providerId, requestId, model)
     if (!statusResult.upstream.ok) {
       throw new Error(upstreamErrorMessage(statusResult.upstream.status, statusResult.text, 'Video status request failed'))
     }
@@ -1576,10 +1590,11 @@ async function handleMedia(request: Request, env: RuntimeEnv): Promise<Response>
   }
   const provider = getProviderPreset(body.provider)
   const primaryKind = mode === 'image_generation' ? 'images' : 'videos'
-  const generationParams = normalizeGenerationParams(body.generationParams)
+  const seedanceVideo = mode === 'video_generation' && isSeedanceModelId(model)
+  const generationParams = seedanceVideo ? body.generationParams : normalizeGenerationParams(body.generationParams)
   const { payload: builtPayload, upstreamModel } = buildMediaPayload(mode, model, prompt, provider.id, generationParams, attachments)
   const inputImage = attachments[0]
-  const primaryPayload = inputImage
+  const primaryPayload = inputImage && !seedanceVideo
     ? mode === 'image_generation' && provider.id === 'openai'
       ? {
           ...(objectValue(builtPayload) || {}),
@@ -1590,6 +1605,7 @@ async function handleMedia(request: Request, env: RuntimeEnv): Promise<Response>
   const notice = mediaModelNotice(mode, model, upstreamModel)
 
   const primary = await postUpstreamMedia(env, baseUrl, apiKey, provider.id, primaryKind, primaryPayload, {
+    ...(seedanceVideo ? { endpoint: buildSeedanceEndpoint(baseUrl, provider.id) } : {}),
     ...(mode === 'image_generation' && inputImage ? { endpoint: buildImageEditEndpoint(baseUrl, provider.id) } : {}),
     ...(provider.id === 'openai' && inputImage && mode === 'video_generation'
       ? { attachments, attachmentField: 'input_reference' }
@@ -1602,7 +1618,8 @@ async function handleMedia(request: Request, env: RuntimeEnv): Promise<Response>
       text: primary.text,
       status: primary.upstream.status,
     })
-    if (mode === 'video_generation' && !normalized.attachments.length) {
+    // Persist the accepted Seedance job immediately. Status checks never replay its POST.
+    if (mode === 'video_generation' && !seedanceVideo && !normalized.attachments.length) {
       const requestID = extractVideoRequestID(primary.text)
       if (requestID) {
         const polled = await pollVideoResult(env, baseUrl, apiKey, provider.id, requestID, model)

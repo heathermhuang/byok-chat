@@ -6,6 +6,8 @@ export const IMAGE_BACKGROUND_OPTIONS = ['auto', 'transparent', 'opaque'] as con
 export const IMAGE_FORMAT_OPTIONS = ['png', 'webp', 'jpeg'] as const
 export const VIDEO_SIZE_OPTIONS = ['720x1280', '1280x720', '1024x1792', '1792x1024'] as const
 export const VIDEO_SECOND_OPTIONS = ['4', '8', '12'] as const
+export const SEEDANCE_RESOLUTION_OPTIONS = ['480p', '720p', '1080p'] as const
+export const SEEDANCE_RATIO_OPTIONS = ['16:9', '4:3', '1:1', '3:4', '9:16', '21:9'] as const
 
 export type ReasoningEffort = typeof REASONING_EFFORT_OPTIONS[number]
 export type Verbosity = typeof VERBOSITY_OPTIONS[number]
@@ -35,6 +37,10 @@ export type GenerationParams = {
   video?: {
     size?: VideoSize
     seconds?: VideoSeconds
+    duration?: number
+    resolution?: typeof SEEDANCE_RESOLUTION_OPTIONS[number]
+    aspectRatio?: typeof SEEDANCE_RATIO_OPTIONS[number]
+    generateAudio?: boolean
   }
 }
 
@@ -87,6 +93,10 @@ export function normalizeGenerationParams(value: unknown): GenerationParams {
     video: nonEmptyObject({
       size: stringOption(video.size, VIDEO_SIZE_OPTIONS),
       seconds: stringOption(video.seconds, VIDEO_SECOND_OPTIONS),
+      duration: Number.isInteger(video.duration) ? finiteNumber(video.duration, 4, 30) : undefined,
+      resolution: stringOption(video.resolution, SEEDANCE_RESOLUTION_OPTIONS),
+      aspectRatio: stringOption(video.aspectRatio, SEEDANCE_RATIO_OPTIONS),
+      generateAudio: typeof video.generateAudio === 'boolean' ? video.generateAudio : undefined,
     }) as GenerationParams['video'],
   }
 }
