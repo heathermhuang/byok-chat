@@ -11,6 +11,7 @@ const cases = [
 
 const browser = await chromium.launch({
   headless: true,
+  channel: process.env.BYOK_CHAT_BROWSER_CHANNEL || undefined,
   proxy: getProxyConfig(baseUrl),
 })
 
@@ -87,25 +88,25 @@ try {
     try {
       await page.goto(baseUrl, { waitUntil: 'networkidle' })
       await page.getByRole('heading', { name: 'Byok Chat' }).waitFor({ timeout: 10_000 })
-      await page.getByRole('heading', { name: 'Connect your provider. Keep control.' }).waitFor({ timeout: 10_000 })
+      await page.getByRole('heading', { name: 'Test your key. Chat with your model.' }).waitFor({ timeout: 10_000 })
 
       await chooseNecessaryStorage(page)
 
       assert.equal(await page.title(), 'BYOK Chat · Bring Your Own Key')
-      assert.ok(await page.getByRole('button', { name: /OpenRouter/i }).count() >= 1)
+      assert.equal(await page.getByLabel('Provider', { exact: true }).inputValue(), 'openrouter')
       const githubLink = page.getByRole('link', { name: /Open source.*GitHub/i })
       assert.equal(await githubLink.count(), 1)
       assert.equal(await githubLink.getAttribute('href'), 'https://github.com/heathermhuang/byok-chat')
       assert.equal(await githubLink.getAttribute('target'), '_blank')
       assert.equal(await page.locator('.lab-sidebar').getByRole('button', { name: 'OpenAI', exact: true }).count(), 0)
-      assert.equal(await page.getByRole('button', { name: /Fetch models/i }).count(), 0)
+      assert.equal(await page.getByRole('button', { name: 'Fetch models', exact: true }).count(), 1)
       assert.equal(await page.locator('.workspace-system-field, .workspace-param-grid, .workspace-notes-field, .workspace-tags-field, .model-fetch-row, .trust-row').count(), 0)
-      assert.equal(await page.locator('.setup-state .endpoint-actions button').count(), 1)
+      assert.equal(await page.getByRole('button', { name: 'Test key', exact: true }).count(), 1)
       const horizontalLayout = await page.evaluate(() => ({
         documentWidth: document.documentElement.scrollWidth,
         viewportWidth: window.innerWidth,
-        setupRight: document.querySelector('.setup-state')?.getBoundingClientRect().right ?? 0,
-        formRight: document.querySelector('.endpoint-form')?.getBoundingClientRect().right ?? 0,
+        setupRight: document.querySelector('.key-test-workspace')?.getBoundingClientRect().right ?? 0,
+        formRight: document.querySelector('.key-test-settings')?.getBoundingClientRect().right ?? 0,
       }))
       assert.ok(horizontalLayout.documentWidth <= horizontalLayout.viewportWidth + 1, `page should not overflow horizontally: ${JSON.stringify(horizontalLayout)}`)
       assert.ok(horizontalLayout.setupRight <= horizontalLayout.viewportWidth + 1, `setup should stay inside viewport: ${JSON.stringify(horizontalLayout)}`)
@@ -116,18 +117,18 @@ try {
         const mobileLayout = await page.evaluate(() => {
           const consoleMain = document.querySelector('.console-main')?.getBoundingClientRect()
           const sidebar = document.querySelector('.lab-sidebar')?.getBoundingClientRect()
-          const endpointForm = document.querySelector('.endpoint-form')?.getBoundingClientRect()
+          const endpointForm = document.querySelector('.key-test-settings')?.getBoundingClientRect()
           const threadRail = document.querySelector('.thread-rail-section')
           const systemPrompt = document.querySelector('.workspace-system-field')
-          const baseUrl = document.querySelector('.base-url-field')
+          const baseUrl = document.querySelector('.key-test-settings input[placeholder="https://api.example.com/v1"]')
           const setupCopy = document.querySelector('.setup-copy')
-          const modelFetchRow = document.querySelector('.model-fetch-row')
+          const modelFetchRow = document.querySelector('.key-test-fetch')
           const brand = document.querySelector('.mobile-brand-lockup')?.getBoundingClientRect()
           const statusChips = [...document.querySelectorAll('.strip-meter > span')]
             .filter((element) => getComputedStyle(element).display !== 'none')
             .map((element) => element.getBoundingClientRect().right)
           const modelCount = document.querySelector('.model-count-pill')
-          const saveButton = document.querySelector('.setup-state .endpoint-actions .button')?.getBoundingClientRect()
+          const saveButton = document.querySelector('.key-test-fetch .button')?.getBoundingClientRect()
           return {
             consoleTop: consoleMain?.top ?? -1,
             sidebarTop: sidebar?.top ?? -1,
@@ -150,9 +151,9 @@ try {
         assert.ok(mobileLayout.sidebarTop >= mobileLayout.viewportHeight - 1, `mobile profile rail should move below the first viewport, got top ${mobileLayout.sidebarTop}`)
         assert.equal(mobileLayout.threadRailDisplay, 'none')
         assert.ok(['none', 'missing'].includes(mobileLayout.systemPromptDisplay), `mobile setup should hide system prompt, got ${mobileLayout.systemPromptDisplay}`)
-        assert.ok(['none', 'missing'].includes(mobileLayout.baseUrlDisplay), `mobile preset setup should hide base URL, got ${mobileLayout.baseUrlDisplay}`)
+        assert.ok(!['none', 'missing'].includes(mobileLayout.baseUrlDisplay), 'key testing must expose the endpoint URL on mobile')
         assert.ok(['none', 'missing'].includes(mobileLayout.setupCopyDisplay), `mobile setup should hide copy panel, got ${mobileLayout.setupCopyDisplay}`)
-        assert.ok(['none', 'missing'].includes(mobileLayout.modelFetchDisplay), `mobile setup should hide model fetch controls, got ${mobileLayout.modelFetchDisplay}`)
+        assert.ok(!['none', 'missing'].includes(mobileLayout.modelFetchDisplay), 'model discovery must be available on mobile')
         assert.ok(mobileLayout.brandTop >= 0 && mobileLayout.brandBottom <= mobileLayout.viewportHeight, `mobile product identity should be in the first viewport: ${JSON.stringify(mobileLayout)}`)
         assert.ok(mobileLayout.statusChips.every((right) => right <= 390 + 1), `mobile status chips should stay inside the viewport: ${JSON.stringify(mobileLayout.statusChips)}`)
         assert.equal(mobileLayout.modelCountDisplay, 'none')
@@ -214,34 +215,16 @@ try {
   try {
     await setupFlowPage.goto(baseUrl, { waitUntil: 'networkidle' })
     await chooseNecessaryStorage(setupFlowPage)
-    const providerCardLayout = await setupFlowPage.locator('.provider-chip').evaluateAll((cards) => cards.map((card) => {
-      const cardBox = card.getBoundingClientRect()
-      const copyBox = card.querySelector('.provider-copy')?.getBoundingClientRect()
-      return {
-        cardTop: cardBox.top,
-        cardBottom: cardBox.bottom,
-        copyTop: copyBox?.top ?? -1,
-        copyBottom: copyBox?.bottom ?? -1,
-      }
-    }))
-    assert.equal(providerCardLayout.length, 9)
-    for (const item of providerCardLayout) {
-      assert.ok(item.copyTop >= item.cardTop - 0.5, `provider text must start inside its card: ${JSON.stringify(item)}`)
-      assert.ok(item.copyBottom <= item.cardBottom + 0.5, `provider text must end inside its card: ${JSON.stringify(item)}`)
-    }
-    await setupFlowPage.getByRole('button', { name: 'Custom' }).click()
-    assert.equal(await setupFlowPage.locator('.setup-state .workspace-system-field, .setup-state .workspace-param-grid, .setup-state .workspace-notes-field, .setup-state .workspace-tags-field, .setup-state .model-fetch-row, .setup-state .trust-row, .setup-state label.model-select').count(), 0)
-    assert.equal(await setupFlowPage.locator('.setup-state .endpoint-actions button').count(), 1)
+    await setupFlowPage.getByLabel('Provider', { exact: true }).selectOption('custom')
+    await setupFlowPage.getByText('Profile and storage options', { exact: true }).click()
     await setupFlowPage.getByLabel('Profile name').fill('Custom gateway')
     await setupFlowPage.getByLabel('Base URL').fill('https://custom.example/v1')
-    await setupFlowPage.getByRole('button', { name: 'Save & connect' }).scrollIntoViewIfNeeded()
-    const saveButtonBox = await setupFlowPage.getByRole('button', { name: 'Save & connect' }).boundingBox()
-    assert.ok(saveButtonBox, 'Save button should be reachable in short setup viewport')
-    assert.ok(saveButtonBox.y >= 0 && saveButtonBox.y + saveButtonBox.height <= 540, 'Save button should scroll into view in short setup viewport')
     await setupFlowPage.getByLabel('API key', { exact: true }).fill('test-key')
-    await setupFlowPage.getByRole('button', { name: 'Save & connect' }).scrollIntoViewIfNeeded()
-    await setupFlowPage.getByRole('button', { name: 'Save & connect' }).click()
-    await waitForCondition(() => setupFlowModelRequests.length === 1, 'setup save should auto-fetch models')
+    await setupFlowPage.getByRole('button', { name: 'Fetch models', exact: true }).click()
+    await waitForCondition(() => setupFlowModelRequests.length === 1, 'setup should fetch the selected provider models')
+    await setupFlowPage.route('**/api/diagnostics', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ status: 'ok', checks: [{ label: 'Models endpoint', status: 'ok', message: 'Model endpoint responded.' }, { label: 'Chat endpoint', status: 'ok', message: 'Chat probe succeeded.' }] }) }))
+    await setupFlowPage.getByRole('button', { name: 'Test key', exact: true }).click()
+    await setupFlowPage.getByRole('button', { name: 'Chat with setup-auto-model', exact: true }).click()
     await setupFlowPage.getByText('Chat ready').waitFor({ timeout: 10_000 })
     await setupFlowPage.getByRole('button', { name: /Custom gateway/ }).waitFor({ timeout: 10_000 })
     await setupFlowPage.locator('.toolbar-model-switcher select').waitFor({ timeout: 10_000 })

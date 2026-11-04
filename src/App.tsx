@@ -1,5 +1,8 @@
 import { Check, Download, FolderDown, KeyRound, Plus, Search, ShieldCheck, SlidersHorizontal, X } from 'lucide-react'
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
+import { KeyTestWorkspace } from './components/KeyTestWorkspace'
+import { useProviderTest } from './hooks/useProviderTest'
+import { sameTestConnection } from './lib/key-test'
 import { EndpointForm } from './components/EndpointForm'
 import { ProviderIcon } from './components/ProviderIcon'
 import { fetchModels, type MediaMode } from './lib/api'
@@ -54,6 +57,13 @@ export function App() {
   const [{ profiles, activeProfileId }, setProfileState] = useState(loadProfiles)
   const [{ threads, activeThreadId }, setThreadState] = useState(loadThreadState)
   const [draft, setDraft] = useState<ByokProfile>(() => profiles.find((item) => item.id === activeProfileId) || profiles[0] || defaultProfile())
+  const [workspaceView, setWorkspaceView] = useState<'test' | 'chat'>(() => profileCanRun(draft) ? 'chat' : 'test')
+  const providerTest = useProviderTest(draft)
+  const currentDraftRef = useRef(draft)
+  currentDraftRef.current = draft
+  const modelRequestRef = useRef(0)
+  const chatRegionRef = useRef<HTMLDivElement>(null)
+  const focusChatRef = useRef(false)
   const [showKey, setShowKey] = useState(false)
   const [modelQuery, setModelQuery] = useState('')
   const [fetchState, setFetchState] = useState<'idle' | 'loading' | 'error'>('idle')
@@ -142,7 +152,7 @@ export function App() {
     }
   }
 
-  async function saveDraft(nextDraft = draft, options: { status?: string; autoFetchModels?: boolean; closeWhenReady?: boolean } = {}) {
+  async function saveDraft(nextDraft = draft, options: { status?: string; autoFetchModels?: boolean; closeWhenReady?: boolean; expected?: ByokProfile } = {}) {
     setSecretBusy(true)
     try {
       let normalized: ByokProfile = { ...nextDraft, baseUrl: normalizeBaseUrl(nextDraft.baseUrl) }
@@ -188,6 +198,7 @@ export function App() {
           fetchMessage = `Profile saved, but model fetch failed: ${error instanceof Error ? error.message : 'Failed to fetch models.'}`
         }
       }
+      if (options.expected && !sameTestConnection(currentDraftRef.current, options.expected)) return false
       const nextProfiles = upsertProfile(profiles, normalized)
       setProfileState({ profiles: nextProfiles, activeProfileId: normalized.id })
       setDraft(normalized)
@@ -205,6 +216,7 @@ export function App() {
   }
 
   function selectProfile(profile: ByokProfile) {
+    setWorkspaceView(profileCanRun(profile) ? 'chat' : 'test')
     setDraft(profile)
     setKeyStorage(profile.encryptedApiKey ? 'passphrase' : 'browser')
     setPassphrase('')
@@ -222,6 +234,7 @@ export function App() {
   }
 
   function newProfile(provider: ProviderId = 'openrouter') {
+    setWorkspaceView('test')
     const profile = cloneProfile(provider)
     const thread = createThread(profile.id)
     setDraft(profile)
@@ -263,11 +276,14 @@ export function App() {
       setStatus(`${activeProvider.label} does not expose a model list here. Enter the model ID manually.`)
       return
     }
+    const candidate = draft
+    const requestId = ++modelRequestRef.current
     setFetchState('loading')
     try {
-      const fetched = await profileWithFetchedModels(draft)
+      const fetched = await profileWithFetchedModels(candidate)
+      if (requestId !== modelRequestRef.current || !sameTestConnection(currentDraftRef.current, candidate)) return
       const nextDraft = fetched.profile
-      const saved = await saveDraft(nextDraft, { status: '' })
+      const saved = await saveDraft(nextDraft, { status: '', expected: candidate })
       setFetchState('idle')
       if (!saved) return
       if (fetched.compatibleModels.length) {
@@ -278,8 +294,11 @@ export function App() {
         setStatus('No compatible models returned. Enter a model ID manually.')
       }
     } catch (error) {
+      if (requestId !== modelRequestRef.current || !sameTestConnection(currentDraftRef.current, candidate)) return
       setFetchState('error')
       setStatus(error instanceof Error ? error.message : 'Failed to fetch models.')
+    } finally {
+      if (requestId === modelRequestRef.current) setFetchState(current => current === 'loading' ? 'idle' : current)
     }
   }
 
@@ -409,6 +428,7 @@ export function App() {
   const draftIsSaved = Boolean(activeProfileId === draft.id && profiles.some((profile) => profile.id === draft.id))
   const isConfigured = Boolean(draftIsSaved && draft.baseUrl && draft.apiKey && draft.selectedModel)
   const canRun = Boolean(isConfigured && selectedMode)
+  const isChatView = canRun && workspaceView === 'chat'
   const inspectorOpen = configOpen
   const mediaMode = selectedMode === 'image_generation' || selectedMode === 'video_generation' ? selectedMode as MediaMode : undefined
   const toolsAvailable = selectedMode === 'chat' && activeProvider.supportsTools
@@ -444,12 +464,41 @@ export function App() {
   const shellClassName = [
     'app-shell',
     'one-page-app',
-    canRun ? 'is-ready' : 'needs-setup',
+    isChatView ? 'is-ready' : 'needs-setup',
     inspectorOpen ? 'inspector-open' : 'inspector-closed',
     profiles.length ? 'has-profiles' : 'no-profiles',
     `provider-${draft.provider.replace(/[^a-z0-9-]/gi, '-')}`,
     selectedMode ? `mode-${selectedMode}` : 'mode-setup',
   ].join(' ')
+
+  async function startTestedWorkspace() {
+    if (selectedMode === 'chat' && !providerTest.hasCurrentSuccess()) return
+    if (!selectedMode) return
+    const candidate = draft
+    const saved = await saveDraft(candidate, { status: '', expected: candidate })
+    if (!saved || !sameTestConnection(currentDraftRef.current, candidate)) return
+    if (selectedMode === 'chat' && !providerTest.hasCurrentSuccess()) return
+    setConfigOpen(false)
+    focusChatRef.current = true
+    setWorkspaceView('chat')
+    setStatus(`Using ${candidate.selectedModel}.`)
+  }
+
+  useEffect(() => {
+    if (!isChatView || !focusChatRef.current || !chatRegionRef.current) return
+    const region = chatRegionRef.current
+    const focus = () => {
+      const composer = region.querySelector<HTMLTextAreaElement>('textarea')
+      if (!composer) return false
+      composer.focus()
+      focusChatRef.current = false
+      return true
+    }
+    if (focus()) return
+    const observer = new MutationObserver(() => { if (focus()) observer.disconnect() })
+    observer.observe(region, { childList: true, subtree: true })
+    return () => observer.disconnect()
+  }, [isChatView])
 
   function renderEndpointForm() {
     return (
@@ -536,7 +585,7 @@ export function App() {
                     <span className="provider-mini"><ProviderIcon provider={profile.provider} size={16} /></span>
                     <strong>{profile.name || provider.label}</strong>
                   </span>
-                  <span>{profile.selectedModel || 'model-id'}</span>
+                  <span>{(isActive ? draft.selectedModel : profile.selectedModel) || 'model-id'}</span>
                 </button>
               )
             })}
@@ -618,7 +667,7 @@ export function App() {
               <span><strong>BYOK Chat</strong><small>Bring Your Own Key</small></span>
             </div>
             <p className="eyebrow">BYOK = Bring Your Own Key</p>
-            <h1>{canRun ? `Chat with ${draft.selectedModel}` : 'Connect your provider. Keep control.'}</h1>
+            <h1>{isChatView ? `Chat with ${draft.selectedModel}` : 'Test your key. Chat with your model.'}</h1>
             <p className="strip-copy">
               {canRun
                 ? `${activeProvider.label} / ${endpointHost} / ${capabilitySummary}`
@@ -630,15 +679,16 @@ export function App() {
               <span className={`deploy-pill ${deployment.kind}`}>
                 {deployment.label}
               </span>
-              <span className={`status-pill ${canRun ? 'ready' : 'setup'}`}>
-                {canRun ? <Check size={15} /> : <KeyRound size={15} />}
-                {canRun ? `${modeLabel} ready` : 'Setup needed'}
+              <span className={`status-pill ${isChatView || providerTest.passed ? 'ready' : 'setup'}`}>
+                {isChatView || providerTest.passed ? <Check size={15} /> : <KeyRound size={15} />}
+                {isChatView ? `${modeLabel} ready` : providerTest.passed ? 'Chat probe passed' : 'Test your key'}
               </span>
               <span className="privacy-pill" title="Profiles and threads are saved in this browser.">
                 <ShieldCheck size={14} /> Saved locally
               </span>
               <span className="model-count-pill">{modelCountLabel} models</span>
             </div>
+            {canRun && isChatView ? <button className="button secondary test-key-toggle" type="button" onClick={() => setWorkspaceView('test')}><KeyRound size={16} /> Test key</button> : null}
             {canRun ? (
               <button
                 className="button secondary inspector-toggle"
@@ -652,7 +702,7 @@ export function App() {
           </div>
         </header>
 
-        <section className={`chat-frame ${canRun ? '' : 'disabled'}`}>
+        <section className={`chat-frame ${isChatView ? '' : 'disabled key-testing'}`}>
           {threadUndo ? (
             <div className="undo-toast" role="status" aria-live="polite">
               <span>{threadUndo.label}</span>
@@ -671,7 +721,9 @@ export function App() {
               </button>
             </div>
           ) : null}
-          {canRun ? (
+          {isChatView ? (
+            <div className="chat-workspace-stack" ref={chatRegionRef}>
+            {providerTest.passed ? <div className="tested-chat-receipt" role="status"><Check size={16} /><span>Chat probe passed for {draft.selectedModel}</span></div> : null}
             <Suspense fallback={<div className="empty-state compact"><h2>Loading workspace</h2></div>}>
               <ByokAssistant
                 key={`${draft.id}:${activeThread.id}:${selectedMode}`}
@@ -692,46 +744,32 @@ export function App() {
                 status={status}
               />
             </Suspense>
-          ) : (
-            <div className="setup-state">
-              <div className="setup-copy">
-                <div className={`setup-status-mark ${canRun ? 'ready' : 'setup'}`} aria-hidden="true">
-                  <span className="status-dot" />
-                  <span className="status-line" />
-                  <span className="status-cursor" />
-                </div>
-                <p className="eyebrow">Your account. Your access.</p>
-                <h2>{selectedUnsupportedReason ? 'Select a supported model.' : 'Use the providers you already trust.'}</h2>
-                <p>{selectedUnsupportedReason || 'Connect one provider account here; access and billing remain with that provider.'}</p>
-                <div className="setup-trust-list" aria-label="How BYOK Chat handles your data">
-                  <div>
-                    <ShieldCheck size={17} />
-                    <span><strong>Saved here</strong><small>Profiles, keys, and threads stay in this browser.</small></span>
-                  </div>
-                  <div>
-                    <ShieldCheck size={17} />
-                    <span><strong>Active transit only</strong><small>Requests pass through our Worker in memory.</small></span>
-                  </div>
-                  <div>
-                    <ShieldCheck size={17} />
-                    <span><strong>No server archive</strong><small>We do not intentionally keep chat copies.</small></span>
-                  </div>
-                </div>
-                <div className="setup-proof-links">
-                  <a href="/privacy">Read the privacy details</a>
-                  <a href="https://github.com/heathermhuang/byok-chat/blob/main/docs/SECURITY_MODEL.md" target="_blank" rel="noreferrer">Review the security model</a>
-                </div>
-                <div className="setup-steps" aria-label="Setup progress">
-                  {setupSteps.map((step, index) => (
-                    <div className={`setup-step ${step.complete ? 'complete' : ''}`} key={step.label}>
-                      <span>{index + 1}</span>
-                      <strong>{step.label}</strong>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              {renderEndpointForm()}
             </div>
+          ) : (
+            <KeyTestWorkspace
+              profile={draft}
+              selectedMode={selectedMode}
+              test={providerTest}
+              fetchState={fetchState}
+              saving={secretBusy}
+              status={status}
+              onChange={updateDraft}
+              onKeyChange={handleApiKeyChange}
+              onProviderChange={setProvider}
+              onFetchModels={refreshModels}
+              onStartWorkspace={startTestedWorkspace}
+              showKey={showKey}
+              onToggleKey={() => setShowKey(value => !value)}
+              keyStorage={keyStorage}
+              onKeyStorageChange={encrypted => { setKeyStorage(encrypted ? 'passphrase' : 'browser'); setSecretDirty(Boolean(encrypted && draft.apiKey && !draft.encryptedApiKey)) }}
+              passphrase={passphrase}
+              onPassphraseChange={setPassphrase}
+              canEncrypt={secureStorageAvailable}
+              locked={keyIsLocked}
+              unlockPassphrase={unlockPassphrase}
+              onUnlockPassphraseChange={setUnlockPassphrase}
+              onUnlock={unlockStoredKey}
+            />
           )}
         </section>
       </section>

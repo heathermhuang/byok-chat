@@ -1,3 +1,5 @@
+import { isSeedanceModelId } from './seedance.ts'
+
 export const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1'
 
 export const GROK_IMAGE_MODEL_IDS = new Set([
@@ -61,7 +63,7 @@ export function isLikelyImageGenerationModelId(modelId: unknown): boolean {
 export function isLikelyVideoGenerationModelId(modelId: unknown): boolean {
   const id = String(modelId || '').trim().toLowerCase()
   if (!id) return false
-  return GROK_VIDEO_MODEL_IDS.has(id) || id.includes('video-generation') || /(^|[/:-])video(?:-|$)/.test(id)
+  return isSeedanceModelId(id) || GROK_VIDEO_MODEL_IDS.has(id) || id.includes('video-generation') || /(^|[/:-])video(?:-|$)/.test(id)
 }
 
 export function isLikelyChatCompletionModelId(modelId: unknown): boolean {

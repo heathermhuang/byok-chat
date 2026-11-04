@@ -62,8 +62,12 @@ import {
   VERBOSITY_OPTIONS,
   VIDEO_SECOND_OPTIONS,
   VIDEO_SIZE_OPTIONS,
+  SEEDANCE_RESOLUTION_OPTIONS,
+  SEEDANCE_RATIO_OPTIONS,
 } from '../lib/generation-options'
-import { checkMediaJob, diagnoseProvider, generateMedia, sendChat, type ChatToolSettings, type DiagnosticsResult, type GeneratedMediaAttachment, type MediaGenerationResult, type MediaMode } from '../lib/api'
+import { isSeedanceModelId } from '../lib/seedance'
+import { checkMediaJob, diagnoseProvider, generateMedia, sendChat, type ChatToolSettings, type DiagnosticsResult, type GeneratedMediaAttachment, type MediaMode } from '../lib/api'
+import { createVideoJobMonitor, pendingVideoText } from '../lib/video-jobs'
 import { capabilityLabel, getEffectiveModelCapabilities, getUnsupportedModelReason } from '../lib/model-utils'
 import type { ByokProfile } from '../lib/profiles'
 import { createId, type ByokThread, type RunMetadata, type ThreadMessage } from '../lib/threads'
@@ -118,21 +122,6 @@ function appendMessageText(message: AppendMessage) {
     .map((part) => (part.type === 'text' ? part.text : ''))
     .join('\n')
     .trim()
-}
-
-const MEDIA_JOB_POLL_DELAYS_MS = [3_000, 5_000, 8_000, 10_000, 15_000, 20_000, 30_000, 30_000, 30_000, 30_000]
-
-function wait(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
-
-function pendingVideoText(result: MediaGenerationResult): string {
-  const status = result.pendingJob?.status || 'pending'
-  return `Video is still generating upstream (${status}). I'll keep checking until it is ready.`
-}
-
-function unresolvedVideoJob(result: MediaGenerationResult): boolean {
-  return Boolean(result.pendingJob?.requestId && !result.attachments.length)
 }
 
 function byokStatus(message: ThreadMessage): ThreadMessageLike['status'] {
@@ -374,7 +363,7 @@ function ByokAuiMessage({
   const hasPendingVideoJob = role === 'assistant' && Boolean(custom.actionContext?.mediaJob?.requestId && !custom.attachments?.length)
 
   return (
-    <MessagePrimitive.Root className={`message message-${role === 'user' ? 'user' : 'assistant'} ${custom.status === 'error' ? 'message-error-state' : ''}`}>
+    <MessagePrimitive.Root className={`message message-${role === 'user' ? 'user' : 'assistant'} ${custom.status === 'error' && !hasPendingVideoJob ? 'message-error-state' : ''}`}>
       <div className="message-avatar" aria-hidden="true">
         {role === 'user' ? <span className="user-dot">U</span> : <span className="assistant-dot">AI</span>}
       </div>
@@ -385,7 +374,7 @@ function ByokAuiMessage({
         </div>
         <MessagePrimitive.Parts components={messagePartComponents} />
         {custom.metadata ? <RunMetaBar metadata={custom.metadata} compact /> : null}
-        {custom.status === 'error' ? (
+        {custom.status === 'error' && !hasPendingVideoJob ? (
           <ErrorPrimitive.Root className="message-error">
             <strong>Request failed</strong>
             <p>Try again, switch models, or review the endpoint connection.</p>
@@ -407,7 +396,7 @@ function ByokAuiMessage({
               <EditPromptButton onEditStart={onEditStart} />
             </MessagePrimitive.If>
             <MessagePrimitive.If assistant>
-              {custom.status !== 'error' ? (
+              {custom.status !== 'error' && !hasPendingVideoJob ? (
                 <>
                   <ActionBarPrimitive.Reload title="Retry"><RefreshCcw size={14} /></ActionBarPrimitive.Reload>
                   <button type="button" title="Variation" disabled={isRunning} onClick={() => onVariationMessageId(messageId)}>
@@ -416,8 +405,8 @@ function ByokAuiMessage({
                 </>
               ) : null}
               {hasPendingVideoJob ? (
-                <button type="button" title="Check video status" disabled={isRunning} onClick={() => onCheckMediaJob(messageId)}>
-                  <RefreshCw size={14} />
+                <button className="button secondary" style={{ width: 'auto' }} type="button" title="Check video status" disabled={isRunning} onClick={() => onCheckMediaJob(messageId)}>
+                  <RefreshCw size={14} /> Check status
                 </button>
               ) : null}
             </MessagePrimitive.If>
@@ -492,6 +481,9 @@ export function ByokAssistant({
   status,
 }: ByokAssistantProps) {
   const [sending, setSending] = useState(false)
+  const latestThreadRef = useRef(thread)
+  latestThreadRef.current = thread
+  const videoMonitorRef = useRef<ReturnType<typeof createVideoJobMonitor> | null>(null)
   const [activePanel, setActivePanel] = useState<WorkspacePanelId | null>(null)
   const [threadMenuOpen, setThreadMenuOpen] = useState(false)
   const [mobileActionsOpen, setMobileActionsOpen] = useState(false)
@@ -566,9 +558,55 @@ export function ByokAssistant({
   }, [mobileActionsOpen])
 
   function commitMessages(messages: ThreadMessage[]) {
-    const title = thread.title === 'New thread' ? textTitle(messages.find((message) => message.role === 'user')?.text || '') : thread.title
-    onThreadChange(updateThread(thread, { messages, title }))
+    const current = latestThreadRef.current
+    const title = current.title === 'New thread' ? textTitle(messages.find((message) => message.role === 'user')?.text || '') : current.title
+    const updated = updateThread(current, { messages, title })
+    latestThreadRef.current = updated
+    onThreadChange(updated)
   }
+
+  useEffect(() => {
+    if (thread.profileId !== profile.id || !profile.apiKey.trim()) return
+    const monitor = createVideoJobMonitor({
+      check: (job, signal) => checkMediaJob(profile, job, signal),
+      onResult: (messageId, result) => {
+        commitMessages(latestThreadRef.current.messages.map(item => item.id === messageId ? {
+          ...item,
+          text: result.pendingJob && !result.attachments.length
+            ? pendingVideoText(result.pendingJob)
+            : result.text || 'Video status updated.',
+          status: undefined,
+          attachments: result.attachments,
+          metadata: {
+            provider: profile.provider,
+            model: result.model,
+            mode: 'video_generation',
+            statusCode: result.upstreamStatus,
+            createdAt: now(),
+          },
+          actionContext: { ...item.actionContext, mediaJob: result.pendingJob },
+        } : item))
+      },
+      onError: (messageId, error, retrying) => {
+        const detail = error instanceof Error ? error.message : 'Video status check failed.'
+        commitMessages(latestThreadRef.current.messages.map(item => item.id === messageId ? {
+          ...item,
+          text: `${detail} ${retrying ? 'The job is saved; retrying the status check automatically.' : 'The job is saved; use Check video status to try again.'}`,
+          status: undefined,
+        } : item))
+      },
+    })
+    videoMonitorRef.current = monitor
+    monitor.sync(latestThreadRef.current.messages)
+    return () => {
+      monitor.dispose()
+      if (videoMonitorRef.current === monitor) videoMonitorRef.current = null
+    }
+  }, [thread.id, thread.profileId, profile.id, profile.provider, profile.baseUrl, profile.apiKey])
+
+  useEffect(() => {
+    videoMonitorRef.current?.sync(thread.messages)
+  }, [thread.messages])
 
   function togglePanel(panel: WorkspacePanelId) {
     setActivePanel((current) => current === panel ? null : panel)
@@ -612,7 +650,8 @@ export function ByokAssistant({
     try {
       if (options.runMode === 'chat') {
         const result = await sendChat(profile, options.requestMessages, toolSettings)
-        commitMessages(options.displayMessages.map((message) => (
+        if (latestThreadRef.current.id !== thread.id) return
+        commitMessages(latestThreadRef.current.messages.map((message) => (
           message.id === options.assistantId
             ? {
                 ...message,
@@ -626,50 +665,15 @@ export function ByokAssistant({
         )))
       } else {
         const mediaPrompt = options.variation ? `${options.promptText}\n\nCreate a distinct variation with a different composition.` : options.promptText
-        let result = await generateMedia(profile, options.runMode, mediaPrompt, options.inputAttachments)
-        let currentDisplayMessages = options.displayMessages
-
-        if (options.runMode === 'video_generation' && unresolvedVideoJob(result)) {
-          for (const delayMs of MEDIA_JOB_POLL_DELAYS_MS) {
-            const pendingJob = result.pendingJob
-            if (!pendingJob) break
-            currentDisplayMessages = currentDisplayMessages.map((message) => (
-              message.id === options.assistantId
-                ? {
-                    ...message,
-                    text: pendingVideoText(result),
-                    status: 'pending',
-                    attachments: result.attachments,
-                    metadata: {
-                      provider: profile.provider,
-                      model: profile.selectedModel,
-                      mode: options.runMode,
-                      statusCode: result.upstreamStatus,
-                      createdAt: now(),
-                    },
-                    actionContext: {
-                      promptText: options.promptText,
-                      mode: options.runMode,
-                      sourceMessageId: options.sourceMessageId,
-                      mediaJob: pendingJob,
-                    },
-                  }
-                : message
-            ))
-            commitMessages(currentDisplayMessages)
-            await wait(delayMs)
-            result = await checkMediaJob(profile, pendingJob)
-            if (!unresolvedVideoJob(result)) break
-          }
-        }
-
+        const result = await generateMedia(profile, options.runMode, mediaPrompt, options.inputAttachments)
+        if (latestThreadRef.current.id !== thread.id) return
         const mediaJob = result.pendingJob
-        commitMessages(currentDisplayMessages.map((message) => (
+        commitMessages(latestThreadRef.current.messages.map((message) => (
           message.id === options.assistantId
             ? {
                 ...message,
                 text: mediaJob && !result.attachments.length
-                  ? `Video is still generating upstream (${mediaJob.status || 'pending'}). The job is saved here; use Check video status to refresh.`
+                  ? pendingVideoText(mediaJob)
                   : result.text || `${modeLabel} generated.`,
                 status: undefined,
                 attachments: result.attachments,
@@ -691,7 +695,8 @@ export function ByokAssistant({
         )))
       }
     } catch (error) {
-      commitMessages(options.displayMessages.map((message) => (
+      if (latestThreadRef.current.id !== thread.id) return
+      commitMessages(latestThreadRef.current.messages.map((message) => (
         message.id === options.assistantId
           ? {
               ...message,
@@ -834,57 +839,8 @@ export function ByokAssistant({
     if (message) void rerunMessage(message)
   }
 
-  async function checkPendingMediaJob(messageId: string) {
-    const startedMessages = thread.messages
-    const message = startedMessages.find((item) => item.id === messageId)
-    const mediaJob = message?.actionContext?.mediaJob
-    if (!message || !mediaJob || sending) return
-    setSending(true)
-    commitMessages(startedMessages.map((item) => (
-      item.id === messageId
-        ? { ...item, text: 'Checking video status...', status: 'pending' }
-        : item
-    )))
-    try {
-      const result = await checkMediaJob(profile, mediaJob)
-      commitMessages(startedMessages.map((item) => (
-        item.id === messageId
-          ? {
-              ...item,
-              text: result.pendingJob && !result.attachments.length
-                ? pendingVideoText(result)
-                : result.attachments.length
-                  ? result.text || 'Video is ready.'
-                  : result.text || 'Video status updated.',
-              status: undefined,
-              attachments: result.attachments,
-              metadata: {
-                provider: profile.provider,
-                model: result.model || mediaJob.model,
-                mode: 'video_generation',
-                statusCode: result.upstreamStatus,
-                createdAt: now(),
-              },
-              actionContext: {
-                ...item.actionContext,
-                ...(result.pendingJob ? { mediaJob: result.pendingJob } : { mediaJob: undefined }),
-              },
-            }
-          : item
-      )))
-    } catch (error) {
-      commitMessages(startedMessages.map((item) => (
-        item.id === messageId
-          ? {
-              ...item,
-              text: error instanceof Error ? error.message : 'Video status check failed.',
-              status: 'error',
-            }
-          : item
-      )))
-    } finally {
-      setSending(false)
-    }
+  function checkPendingMediaJob(messageId: string) {
+    videoMonitorRef.current?.refresh(messageId)
   }
 
   async function runDiagnostics() {
@@ -1350,6 +1306,7 @@ function RunSettingsPanel({
   const generationParams = profile.generationParams || {}
   const imageParams = generationParams.image || {}
   const videoParams = generationParams.video || {}
+  const seedanceVideo = isSeedanceModelId(profile.selectedModel)
   const modelHint = modelHintForProfile(profile)
 
   function optionalNumber(value: string): number | undefined {
@@ -1492,6 +1449,30 @@ function RunSettingsPanel({
         <section className="run-settings-section">
           <h3>Video</h3>
           <div className="run-control-group">
+            {seedanceVideo ? <>
+              <label className="run-field">
+                <span>Seconds</span>
+                <input type="number" min="4" max="30" step="1" value={videoParams.duration ?? 5} onChange={(event) => updateVideoParams({ duration: optionalNumber(event.target.value) })} />
+              </label>
+              <label className="run-field">
+                <span>Resolution</span>
+                <select value={videoParams.resolution || '720p'} onChange={(event) => updateVideoParams({ resolution: event.target.value as NonNullable<typeof videoParams.resolution> })}>
+                  {SEEDANCE_RESOLUTION_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+                </select>
+              </label>
+              <label className="run-field">
+                <span>Aspect ratio</span>
+                <select value={videoParams.aspectRatio || '16:9'} onChange={(event) => updateVideoParams({ aspectRatio: event.target.value as NonNullable<typeof videoParams.aspectRatio> })}>
+                  {SEEDANCE_RATIO_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+                </select>
+              </label>
+              <label className="run-field">
+                <span>Audio</span>
+                <select value={videoParams.generateAudio ? 'on' : 'off'} onChange={(event) => updateVideoParams({ generateAudio: event.target.value === 'on' })}>
+                  <option value="off">Off</option><option value="on">On</option>
+                </select>
+              </label>
+            </> : <>
             <label className="run-field">
               <span>Size</span>
               <select value={videoParams.size || ''} onChange={(event) => updateVideoParams({ size: event.target.value as NonNullable<NonNullable<ByokProfile['generationParams']>['video']>['size'] || undefined })}>
@@ -1506,6 +1487,7 @@ function RunSettingsPanel({
                 {VIDEO_SECOND_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
               </select>
             </label>
+            </>}
           </div>
         </section>
       ) : null}
