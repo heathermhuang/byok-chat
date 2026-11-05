@@ -45,7 +45,8 @@ export function readConsentPreferences(): ConsentPreferences | null {
     const parsed = JSON.parse(localStorage.getItem(CONSENT_STORAGE_KEY) || 'null') as Partial<ConsentPreferences> | null
     if (!parsed || parsed.version !== 1 || parsed.essential !== true || typeof parsed.analytics !== 'boolean' || !parsed.updatedAt) return null
     const updatedAt = new Date(parsed.updatedAt).getTime()
-    if (!Number.isFinite(updatedAt) || Date.now() - updatedAt > CONSENT_MAX_AGE_MS) return null
+    if (!Number.isFinite(updatedAt)) return null
+    if (parsed.analytics !== false && Date.now() - updatedAt > CONSENT_MAX_AGE_MS) return null
     return parsed as ConsentPreferences
   } catch {
     return null

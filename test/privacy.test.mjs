@@ -184,3 +184,15 @@ test('only the analytics bridge allows same-origin framing', async () => {
   assert.equal(root.headers.get('x-frame-options'), 'DENY')
   assert.match(root.headers.get('content-security-policy'), /frame-ancestors 'none'/)
 })
+
+test('an expired explicit analytics refusal stays off after the automatic default change', () => {
+  const original = globalThis.localStorage
+  globalThis.localStorage = new MemoryStorage()
+  try {
+    localStorage.setItem(CONSENT_STORAGE_KEY, JSON.stringify({ version: 1, essential: true, analytics: false, updatedAt: '2025-01-01T00:00:00.000Z' }))
+    assert.equal(readConsentPreferences()?.analytics, false)
+  } finally {
+    if (original === undefined) delete globalThis.localStorage
+    else globalThis.localStorage = original
+  }
+})

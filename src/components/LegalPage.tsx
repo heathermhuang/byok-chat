@@ -162,7 +162,7 @@ function CookiePolicy() {
             <tbody>
               <tr><td><code>byok.chat.profiles.v1</code></td><td>Saved profiles, settings, and locally stored or encrypted credentials.</td><td>Until you delete profiles or clear site data.</td></tr>
               <tr><td><code>byok.chat.threads.v2</code></td><td>Local thread history and workspace state.</td><td>Until you delete threads or clear site data.</td></tr>
-              <tr><td><code>byok.chat.consent.v1</code></td><td>Your privacy choice and its timestamp.</td><td>Up to 180 days; no initial opt-in prompt.</td></tr>
+              <tr><td><code>byok.chat.consent.v1</code></td><td>Your privacy choice and its timestamp.</td><td>Opt-outs remain until changed; other preferences last up to 180 days.</td></tr>
             </tbody>
           </table>
         </div>
