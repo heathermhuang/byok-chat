@@ -38,7 +38,7 @@ test('stores an explicit versioned analytics choice and reads it back', () => {
   }
 })
 
-test('expires stale consent so the visitor is asked again', () => {
+test('expires stale preferences without requiring an initial prompt', () => {
   const originalLocalStorage = globalThis.localStorage
   globalThis.localStorage = new MemoryStorage()
   try {
@@ -143,7 +143,7 @@ test('withdrawal cancels an analytics continuation waiting for the tag load', as
     cookie: '', title: 'BYOK Chat',
     getElementById: () => null,
     createElement: () => script,
-    head: { appendChild: () => {} },
+    body: { appendChild: () => {} },
   }
   const originals = Object.fromEntries(['window', 'document', 'location'].map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)]))
   try {
@@ -165,4 +165,11 @@ test('withdrawal cancels an analytics continuation waiting for the tag load', as
       else delete globalThis[key]
     }
   }
+})
+
+test('fresh visits default to automatic analytics without an initial consent banner', () => {
+  const source = readFileSync(new URL('../src/components/PrivacyControls.tsx', import.meta.url), 'utf8')
+  assert.match(source, /preferences\?\.analytics !== false/)
+  assert.match(source, /useState<ConsentView>\('closed'\)/)
+  assert.doesNotMatch(source, /view === 'banner'/)
 })

@@ -25,27 +25,12 @@ async function chooseNecessaryStorage(page) {
 }
 
 async function captureDockedConsent(page, name) {
-  await page.locator('.consent-banner').waitFor({ timeout: 10_000 })
-  const layout = await page.evaluate(() => {
-    const content = document.querySelector('.app-shell, .legal-shell')?.getBoundingClientRect()
-    const banner = document.querySelector('.consent-banner')?.getBoundingClientRect()
-    const composer = document.querySelector('.composer')?.getBoundingClientRect()
-    const root = document.querySelector('.site-root')?.getBoundingClientRect()
-    return {
-      viewportHeight: window.innerHeight,
-      rootBottom: root?.bottom ?? -1,
-      contentBottom: content?.bottom ?? -1,
-      bannerTop: banner?.top ?? -1,
-      bannerBottom: banner?.bottom ?? -1,
-      composerBottom: composer?.bottom ?? null,
-    }
-  })
-  assert.ok(Math.abs(layout.contentBottom - layout.bannerTop) <= 1.5, `consent bar must follow content without overlap: ${JSON.stringify(layout)}`)
-  assert.ok(layout.bannerBottom <= layout.viewportHeight + 1, `consent bar must stay inside the viewport: ${JSON.stringify(layout)}`)
-  assert.ok(layout.rootBottom <= layout.viewportHeight + 1, `consent layout must stay inside the viewport: ${JSON.stringify(layout)}`)
-  if (layout.composerBottom !== null) {
-    assert.ok(layout.composerBottom <= layout.bannerTop + 1, `consent bar must not cover the composer: ${JSON.stringify(layout)}`)
-  }
+  assert.equal(await page.locator('.consent-banner').count(), 0, 'public statistics must not require an initial opt-in prompt')
+  const layout = await page.evaluate(() => ({
+    viewportHeight: innerHeight,
+    rootBottom: document.querySelector('.site-root')?.getBoundingClientRect().bottom ?? -1,
+  }))
+  assert.ok(layout.rootBottom <= layout.viewportHeight + 1, `the application must fit without a consent bar: ${JSON.stringify(layout)}`)
   const path = caseScreenshotPath(name)
   await writeFile(path, await page.screenshot({ fullPage: false }))
   console.log(`browser smoke docked consent ok: ${baseUrl}`)

@@ -4,7 +4,7 @@ import { openPrivacySettings } from '../lib/privacy'
 
 export type LegalPageKind = 'privacy' | 'terms' | 'cookies'
 
-const EFFECTIVE_DATE = 'July 15, 2026'
+const EFFECTIVE_DATE = 'November 5, 2026'
 const OPERATOR_NAME = import.meta.env.VITE_OPERATOR_NAME?.trim() || 'Byok.Chat'
 const CONTACT_EMAIL = import.meta.env.VITE_LEGAL_CONTACT_EMAIL?.trim() || 'support@byok.chat'
 
@@ -29,7 +29,7 @@ function LegalNav({ current }: { current: LegalPageKind }) {
 function PrivacyPolicy() {
   return (
     <>
-      <p className="legal-lede">BYOK Chat is designed around browser-local storage. This policy explains the smaller set of information that leaves your device when you use the service, optional analytics, and your choices.</p>
+      <p className="legal-lede">BYOK Chat is designed around browser-local storage. This policy explains the smaller set of information that leaves your device when you use the service, automatic page-view analytics, and your choices.</p>
 
       <section>
         <h2>1. Who operates this service</h2>
@@ -57,10 +57,10 @@ function PrivacyPolicy() {
         <ul>
           <li>To deliver the service you request, route model and tool calls, and return responses.</li>
           <li>To secure, debug, and maintain the Worker and prevent abuse.</li>
-          <li>To understand page-level usage and improve the product when you consent to analytics.</li>
+          <li>To understand page-level usage and improve the product with automatic public page-view analytics.</li>
           <li>To answer support, legal, and privacy requests.</li>
         </ul>
-        <p>Depending on where you live, the relevant legal bases are performance of a contract or steps requested by you, legitimate interests in security and service reliability, legal obligations, and consent for optional analytics.</p>
+        <p>Depending on where you live, the relevant legal bases are performance of a contract or steps requested by you, legitimate interests in security and service reliability, legal obligations, and consent for automatic page-view analytics.</p>
       </section>
 
       <section>
@@ -69,7 +69,7 @@ function PrivacyPolicy() {
           <li><strong>Cloudflare</strong> hosts and protects the site and Worker.</li>
           <li><strong>Your selected AI provider</strong> receives model requests under the account and terms connected to your API key.</li>
           <li><strong>Search or reader services</strong>, including Jina or a custom service, receive a query or public URL only when you enable and use those tools.</li>
-          <li><strong>Google Analytics</strong> receives limited site-usage data only after consent.</li>
+          <li><strong>Google Analytics</strong> receives limited site-usage data automatically on public page visits.</li>
           <li><strong>Authorities or advisers</strong> may receive information when required by law or reasonably necessary to protect rights, users, and the service.</li>
         </ul>
         <p>Each provider may process information in other countries. Review your chosen provider's privacy terms before sending sensitive or regulated data.</p>
@@ -77,7 +77,7 @@ function PrivacyPolicy() {
 
       <section>
         <h2>6. Retention and security</h2>
-        <p>Browser-local data remains until you delete it in the app, clear site data, or remove the browser profile. Request content is held in Worker memory only as needed to complete the request; we do not intentionally create a server-side chat archive. Operational logs are retained only as needed for security and reliability. Consented GA4 event-level data may be retained for up to 14 months, while first-party GA cookies are configured to expire within 12 months.</p>
+        <p>Browser-local data remains until you delete it in the app, clear site data, or remove the browser profile. Request content is held in Worker memory only as needed to complete the request; we do not intentionally create a server-side chat archive. Operational logs are retained only as needed for security and reliability. GA4 event-level data may be retained for up to 14 months, while first-party GA cookies are configured to expire within 12 months.</p>
         <p>We use HTTPS, restrictive browser security headers, endpoint allowlisting, local encryption options, and data minimisation. No online service is risk-free. Treat a provider key stored without passphrase encryption as readable by anyone who can access that browser profile or execute code in it.</p>
       </section>
 
@@ -162,15 +162,15 @@ function CookiePolicy() {
             <tbody>
               <tr><td><code>byok.chat.profiles.v1</code></td><td>Saved profiles, settings, and locally stored or encrypted credentials.</td><td>Until you delete profiles or clear site data.</td></tr>
               <tr><td><code>byok.chat.threads.v2</code></td><td>Local thread history and workspace state.</td><td>Until you delete threads or clear site data.</td></tr>
-              <tr><td><code>byok.chat.consent.v1</code></td><td>Your privacy choice and its timestamp.</td><td>Up to 180 days, then we ask again.</td></tr>
+              <tr><td><code>byok.chat.consent.v1</code></td><td>Your privacy choice and its timestamp.</td><td>Up to 180 days; no initial opt-in prompt.</td></tr>
             </tbody>
           </table>
         </div>
       </section>
 
       <section>
-        <h2>2. Optional Google Analytics</h2>
-        <p>If you allow analytics, the Google tag may set the following first-party cookies. Advertising storage, advertising user data, advertising personalisation, and Google Signals remain disabled.</p>
+        <h2>2. Automatic Google Analytics</h2>
+        <p>Public page-view analytics starts automatically and the Google tag may set the following first-party cookies. Advertising storage, advertising user data, advertising personalisation, and Google Signals remain disabled.</p>
         <div className="legal-table-wrap">
           <table>
             <thead><tr><th>Cookie</th><th>Purpose</th><th>Configured duration</th></tr></thead>
@@ -180,7 +180,7 @@ function CookiePolicy() {
             </tbody>
           </table>
         </div>
-        <p>We use basic consent mode: no Google tag or consent ping is sent before opt-in. Analytics page locations exclude query parameters, and no prompts, form values, profile names, thread titles, model IDs, or API keys are deliberately sent.</p>
+        <p>Public page-view measurement starts automatically without an opt-in prompt. Google runs in a query-free same-origin frame. Analytics page locations exclude query parameters, and no prompts, form values, profile names, thread titles, model IDs, or API keys are deliberately sent.</p>
       </section>
 
       <section>
@@ -201,7 +201,7 @@ const PAGE_META: Record<LegalPageKind, { eyebrow: string; title: string; descrip
   privacy: {
     eyebrow: 'Data and privacy',
     title: 'Privacy Policy',
-    description: 'How BYOK Chat handles browser-local data, provider requests, service logs, and optional analytics.',
+    description: 'How BYOK Chat handles browser-local data, provider requests, service logs, and automatic page-view analytics.',
   },
   terms: {
     eyebrow: 'Service agreement',

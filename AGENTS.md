@@ -11,3 +11,10 @@ Do not add Sub2API auth, routes, sidebar, or build-system coupling here. Provide
 Do not deploy or serve this app locally by default. Local dev servers are resource-heavy for this project.
 
 Use `staging.byok.chat` for staging deployments and QA. Only deploy to `byok.chat` after the user explicitly says it is OK.
+
+## Public analytics
+
+Public page statistics must start automatically and passively, without an opt-in
+requirement or initial analytics prompt. Preserve explicit opt-outs, sensitive
+content exclusions, production-host isolation and query-free Google execution.
+Verify first-visit collection with the real Google tag and intercepted requests.
