@@ -47,7 +47,7 @@ function PrivacyPolicy() {
         <ul>
           <li><strong>Request data:</strong> prompts, relevant thread context, selected settings, attachments, provider endpoint, and API credentials used for the active request.</li>
           <li><strong>Operational data:</strong> IP address, request time, route, response status, security signals, and similar delivery metadata processed by Cloudflare and short-lived service logs.</li>
-          <li><strong>Optional analytics:</strong> if you consent, page path without query parameters, page title, session statistics, approximate geography, and browser/device information. We do not send prompts, thread content, profile names, model IDs, API keys, form values, or custom user identifiers to Google Analytics.</li>
+          <li><strong>Automatic page-view analytics:</strong> page path without query parameters, page title, session statistics, approximate geography, and browser/device information. We do not send prompts, thread content, profile names, model IDs, API keys, form values, or custom user identifiers to Google Analytics.</li>
           <li><strong>Support data:</strong> information you choose to include when contacting us.</li>
         </ul>
       </section>
@@ -60,7 +60,7 @@ function PrivacyPolicy() {
           <li>To understand page-level usage and improve the product with automatic public page-view analytics.</li>
           <li>To answer support, legal, and privacy requests.</li>
         </ul>
-        <p>Depending on where you live, the relevant legal bases are performance of a contract or steps requested by you, legitimate interests in security and service reliability, legal obligations, and consent for automatic page-view analytics.</p>
+        <p>Depending on where you live, the relevant legal bases are performance of a contract or steps requested by you, legitimate interests in security and service reliability, legal obligations, and the applicable basis for site analytics.</p>
       </section>
 
       <section>
@@ -83,7 +83,7 @@ function PrivacyPolicy() {
 
       <section>
         <h2>7. Your rights and choices</h2>
-        <p>You can view, export, correct, or delete browser-local profiles and threads using the app controls. You can withdraw analytics consent at any time through Privacy settings. Depending on your jurisdiction, you may also request access, correction, deletion, restriction, portability, or objection for personal data under our control, and complain to your local data protection authority.</p>
+        <p>You can view, export, correct, or delete browser-local profiles and threads using the app controls. You can turn off analytics at any time through Privacy settings. Depending on your jurisdiction, you may also request access, correction, deletion, restriction, portability, or objection for personal data under our control, and complain to your local data protection authority.</p>
         <p>We do not sell personal information or share it for cross-context behavioural advertising. We do not knowingly discriminate against people for exercising privacy rights.</p>
       </section>
 
@@ -151,7 +151,7 @@ function TermsOfUse() {
 function CookiePolicy() {
   return (
     <>
-      <p className="legal-lede">This policy covers cookies and similar browser storage used by byok.chat. Optional analytics stays off until you actively allow it.</p>
+      <p className="legal-lede">This policy covers cookies and similar browser storage used by byok.chat. Page-view analytics starts automatically without an initial opt-in prompt.</p>
 
       <section>
         <h2>1. Required browser storage</h2>
@@ -191,7 +191,7 @@ function CookiePolicy() {
 
       <section>
         <h2>4. Changes and contact</h2>
-        <p>We will update this policy and request fresh consent if storage purposes materially change. Questions can be sent to <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.</p>
+        <p>We will update this policy if storage purposes materially change. Questions can be sent to <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.</p>
       </section>
     </>
   )

@@ -173,3 +173,14 @@ test('fresh visits default to automatic analytics without an initial consent ban
   assert.match(source, /useState<ConsentView>\('closed'\)/)
   assert.doesNotMatch(source, /view === 'banner'/)
 })
+
+test('only the analytics bridge allows same-origin framing', async () => {
+  const { default: worker } = await import('../src/worker.ts')
+  const env = { ASSETS: { fetch: async () => new Response('<!doctype html>', { headers: { 'content-type': 'text/html', 'content-security-policy': "frame-ancestors 'none'", 'x-frame-options': 'DENY' } }) } }
+  const bridge = await worker.fetch(new Request('https://byok.chat/analytics-bridge'), env, {})
+  assert.equal(bridge.headers.get('x-frame-options'), 'SAMEORIGIN')
+  assert.match(bridge.headers.get('content-security-policy'), /frame-ancestors 'self'/)
+  const root = await worker.fetch(new Request('https://byok.chat/'), env, {})
+  assert.equal(root.headers.get('x-frame-options'), 'DENY')
+  assert.match(root.headers.get('content-security-policy'), /frame-ancestors 'none'/)
+})
