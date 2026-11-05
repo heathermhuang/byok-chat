@@ -38,7 +38,7 @@ test('stores an explicit versioned analytics choice and reads it back', () => {
   }
 })
 
-test('expires stale consent so the visitor is asked again', () => {
+test('expires stale preferences without requiring an initial prompt', () => {
   const originalLocalStorage = globalThis.localStorage
   globalThis.localStorage = new MemoryStorage()
   try {
@@ -143,7 +143,7 @@ test('withdrawal cancels an analytics continuation waiting for the tag load', as
     cookie: '', title: 'BYOK Chat',
     getElementById: () => null,
     createElement: () => script,
-    head: { appendChild: () => {} },
+    body: { appendChild: () => {} },
   }
   const originals = Object.fromEntries(['window', 'document', 'location'].map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)]))
   try {
@@ -164,5 +164,35 @@ test('withdrawal cancels an analytics continuation waiting for the tag load', as
       if (descriptor) Object.defineProperty(globalThis, key, descriptor)
       else delete globalThis[key]
     }
+  }
+})
+
+test('fresh visits default to automatic analytics without an initial consent banner', () => {
+  const source = readFileSync(new URL('../src/components/PrivacyControls.tsx', import.meta.url), 'utf8')
+  assert.match(source, /preferences\?\.analytics !== false/)
+  assert.match(source, /useState<ConsentView>\('closed'\)/)
+  assert.doesNotMatch(source, /view === 'banner'/)
+})
+
+test('only the analytics bridge allows same-origin framing', async () => {
+  const { default: worker } = await import('../src/worker.ts')
+  const env = { ASSETS: { fetch: async () => new Response('<!doctype html>', { headers: { 'content-type': 'text/html', 'content-security-policy': "frame-ancestors 'none'", 'x-frame-options': 'DENY' } }) } }
+  const bridge = await worker.fetch(new Request('https://byok.chat/analytics-bridge'), env, {})
+  assert.equal(bridge.headers.get('x-frame-options'), 'SAMEORIGIN')
+  assert.match(bridge.headers.get('content-security-policy'), /frame-ancestors 'self'/)
+  const root = await worker.fetch(new Request('https://byok.chat/'), env, {})
+  assert.equal(root.headers.get('x-frame-options'), 'DENY')
+  assert.match(root.headers.get('content-security-policy'), /frame-ancestors 'none'/)
+})
+
+test('an expired explicit analytics refusal stays off after the automatic default change', () => {
+  const original = globalThis.localStorage
+  globalThis.localStorage = new MemoryStorage()
+  try {
+    localStorage.setItem(CONSENT_STORAGE_KEY, JSON.stringify({ version: 1, essential: true, analytics: false, updatedAt: '2025-01-01T00:00:00.000Z' }))
+    assert.equal(readConsentPreferences()?.analytics, false)
+  } finally {
+    if (original === undefined) delete globalThis.localStorage
+    else globalThis.localStorage = original
   }
 })

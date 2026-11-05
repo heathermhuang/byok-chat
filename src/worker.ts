@@ -1792,6 +1792,13 @@ async function handleToolReadUrl(request: Request, env: RuntimeEnv): Promise<Res
 export default {
   async fetch(request: Request, env: RuntimeEnv): Promise<Response> {
     const url = new URL(request.url)
+    if (url.pathname.replace(/\/$/, '') === '/analytics-bridge' && ['GET', 'HEAD'].includes(request.method)) {
+      const response = await env.ASSETS.fetch(request)
+      const headers = new Headers(response.headers)
+      headers.set('content-security-policy', SECURITY_HEADERS['content-security-policy'].replace("frame-ancestors 'none'", "frame-ancestors 'self'"))
+      headers.set('x-frame-options', 'SAMEORIGIN')
+      return withSecurityHeaders(new Response(response.body, { status: response.status, headers }))
+    }
     const discovery = await handleAgentDiscovery(request)
     if (discovery) return withSecurityHeaders(withDiscoveryHeaders(discovery, request))
     const rateLimited = await enforceApiRateLimit(request, env)

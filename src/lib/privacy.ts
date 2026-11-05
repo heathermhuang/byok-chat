@@ -7,7 +7,7 @@ export type ConsentPreferences = {
 
 declare global {
   interface Window {
-    dataLayer?: unknown[][]
+    dataLayer?: IArguments[]
     gtag?: (...args: unknown[]) => void
   }
 }
@@ -26,6 +26,7 @@ let analyticsConfigured = false
 let tagLoadPromise: Promise<void> | undefined
 let lastTrackedPage = ''
 let consentRevision = 0
+let analyticsFrame: HTMLIFrameElement | null = null
 
 function isValidMeasurementId(value: string) {
   return /^G-[A-Z0-9]+$/i.test(value)
@@ -44,7 +45,8 @@ export function readConsentPreferences(): ConsentPreferences | null {
     const parsed = JSON.parse(localStorage.getItem(CONSENT_STORAGE_KEY) || 'null') as Partial<ConsentPreferences> | null
     if (!parsed || parsed.version !== 1 || parsed.essential !== true || typeof parsed.analytics !== 'boolean' || !parsed.updatedAt) return null
     const updatedAt = new Date(parsed.updatedAt).getTime()
-    if (!Number.isFinite(updatedAt) || Date.now() - updatedAt > CONSENT_MAX_AGE_MS) return null
+    if (!Number.isFinite(updatedAt)) return null
+    if (parsed.analytics !== false && Date.now() - updatedAt > CONSENT_MAX_AGE_MS) return null
     return parsed as ConsentPreferences
   } catch {
     return null
@@ -68,8 +70,12 @@ export function openPrivacySettings() {
 
 function ensureGtag() {
   window.dataLayer ||= []
-  window.gtag ||= (...args: unknown[]) => {
-    window.dataLayer?.push(args)
+  window.gtag ||= function () {
+    const command = arguments
+    window.dataLayer?.push(command)
+    const [kind, name, params] = Array.from(command)
+    if (kind === 'event' && name === 'page_view') analyticsFrame?.contentWindow?.postMessage({ type: 'byok.analytics.page', id: GA_MEASUREMENT_ID, page: params.page_location }, window.location.origin)
+    if (kind === 'consent' && name === 'update') analyticsFrame?.contentWindow?.postMessage({ type: 'byok.analytics.state', allowed: params.analytics_storage === 'granted' }, window.location.origin)
   }
   return window.gtag
 }
@@ -87,7 +93,8 @@ function consentState(analytics: 'granted' | 'denied') {
 }
 
 function safePageLocation() {
-  return `${window.location.origin}${window.location.pathname}`
+  const path = ['/', '/privacy', '/terms', '/cookies'].includes(window.location.pathname) ? window.location.pathname : '/'
+  return `${window.location.origin}${path}`
 }
 
 function clearGoogleAnalyticsCookies() {
@@ -116,21 +123,24 @@ function clearGoogleAnalyticsCookies() {
 function loadGoogleTag() {
   if (tagLoadPromise) return tagLoadPromise
   tagLoadPromise = new Promise<void>((resolve, reject) => {
-    const existing = document.getElementById(GOOGLE_TAG_ID) as HTMLScriptElement | null
+    const existing = document.getElementById(GOOGLE_TAG_ID) as HTMLIFrameElement | null
     if (existing?.dataset.loaded === 'true') {
       resolve()
       return
     }
-    const script = existing || document.createElement('script')
+    const script = existing || document.createElement('iframe')
     script.id = GOOGLE_TAG_ID
-    script.async = true
-    script.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(GA_MEASUREMENT_ID)}`
+    analyticsFrame = script
+    script.hidden = true
+    script.title = 'Site analytics'
+    script.referrerPolicy = 'no-referrer'
+    script.src = '/analytics-bridge'
     script.addEventListener('load', () => {
       script.dataset.loaded = 'true'
       resolve()
     }, { once: true })
     script.addEventListener('error', () => reject(new Error('Google Analytics failed to load.')), { once: true })
-    if (!existing) document.head.appendChild(script)
+    if (!existing) document.body.appendChild(script)
   })
   return tagLoadPromise
 }
@@ -175,6 +185,6 @@ export async function applyAnalyticsConsent(analyticsAllowed: boolean) {
     page_location: pageLocation,
     page_path: window.location.pathname,
     page_referrer: '',
-    page_title: document.title.slice(0, 120),
+    page_title: 'BYOK Chat',
   })
 }
